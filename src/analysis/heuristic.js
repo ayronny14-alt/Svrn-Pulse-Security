@@ -45,6 +45,7 @@ export function runHeuristicEngine({ jitter, phases, autocorrelations }) {
   const bonuses  = [];
   let   penalty  = 0;  // accumulated penalty [0, 1]
   let   bonus    = 0;  // accumulated bonus   [0, 1]
+  let   hardOverride = null;  // 'vm' | null — bypasses score entirely when set
 
   const stats = jitter.stats;
   if (!stats) return _empty();
@@ -56,59 +57,88 @@ export function runHeuristicEngine({ jitter, phases, autocorrelations }) {
   if (phases) {
     entropyJitterRatio = phases.entropyJitterRatio;
 
-    if (entropyJitterRatio >= 1.08) {
-      // Clear entropy growth under load — signature of real thermal feedback
-      entropyJitterScore = 1.0;
-      bonuses.push({
-        id:     'ENTROPY_GROWS_WITH_LOAD',
-        label:  'Entropy grew under load (thermal feedback confirmed)',
-        detail: `ratio=${entropyJitterRatio.toFixed(3)}  cold_QE=${phases.cold.qe.toFixed(3)}  hot_QE=${phases.hot.qe.toFixed(3)}`,
-        value:  0.12,
-      });
-      bonus += 0.12;
-    } else if (entropyJitterRatio >= 1.02) {
-      entropyJitterScore = 0.7;
-      findings.push({
-        id:     'ENTROPY_MILD_GROWTH',
-        label:  'Weak entropy growth under load',
-        detail: `ratio=${entropyJitterRatio.toFixed(3)}`,
-        severity: 'info',
-        penalty: 0,
-      });
-    } else if (entropyJitterRatio < 1.02 && entropyJitterRatio > 0.95) {
-      // Flat entropy across phases → hypervisor clock insensitive to guest load
-      entropyJitterScore = 0.2;
-      findings.push({
-        id:      'ENTROPY_FLAT_UNDER_LOAD',
-        label:   'Entropy did not grow under load — hypervisor clock suspected',
-        detail:  `ratio=${entropyJitterRatio.toFixed(3)}  (expected ≥ 1.08 for real hardware)`,
-        severity: 'high',
-        penalty:  0.10,
-      });
-      penalty += 0.10;
-    } else if (entropyJitterRatio < 0.95) {
-      // Entropy DECREASED — clock rounding became more aggressive under load
-      entropyJitterScore = 0.0;
-      findings.push({
-        id:      'ENTROPY_DECREASES_UNDER_LOAD',
-        label:   'Entropy shrank under load — hypervisor clock-rounding confirmed',
-        detail:  `ratio=${entropyJitterRatio.toFixed(3)}  (clock rounding more aggressive at high load)`,
-        severity: 'critical',
-        penalty:  0.18,
-      });
-      penalty += 0.18;
+    const coldQE = phases.cold?.qe ?? null;
+    const hotQE  = phases.hot?.qe  ?? null;
+
+    // ── HARD KILL: Phase trajectory mathematical contradiction ──────────────
+    //
+    // EJR is defined as:  entropyJitterRatio = hot_QE / cold_QE
+    //
+    // Before trusting any EJR value, verify it is internally consistent with
+    // the QE measurements it purports to summarise. Two forgery vectors exist:
+    //
+    //   Attack A — EJR field overwritten independently:
+    //     Attacker sets entropyJitterRatio = 1.15 to claim thermal growth,
+    //     but leaves cold_QE = 3.50, hot_QE = 3.00 unchanged.
+    //     Computed EJR = 3.00 / 3.50 = 0.857.
+    //     Discrepancy 1.15 − 0.857 = 0.293 >> 0.005 tolerance → HARD KILL.
+    //
+    //   Attack B — QE values also faked but left inconsistent:
+    //     Attacker overwrites both QE fields carelessly: cold_QE = 3.5,
+    //     hot_QE = 3.0, but EJR = 1.15 is still written.
+    //     cold_QE ≥ hot_QE with EJR ≥ 1.08 is a mathematical impossibility —
+    //     if hot ≤ cold then hot/cold ≤ 1.0, which can never be ≥ 1.08.
+    //
+    // Tolerance of 0.005 accounts for floating-point rounding in the entropy
+    // collector (detectQuantizationEntropy uses discrete histogram bins).
+    //
+    // When HARD KILL fires:
+    //   • hardOverride = 'vm' — fingerprint.js short-circuits isSynthetic
+    //   • entropyJitterScore = 0.0 — no EJR contribution to stage-2 bonus
+    //   • penalty += 1.0 — overwhelms the physical floor cap
+    //   • No further EJR evaluation runs (the data cannot be trusted)
+    //   • The physical floor protection is explicitly bypassed (see aggregate)
+
+    if (coldQE !== null && hotQE !== null) {
+      const computedEJR    = coldQE > 0 ? hotQE / coldQE : null;
+      const fieldTampered  = computedEJR !== null &&
+                             Math.abs(entropyJitterRatio - computedEJR) > 0.005;
+      const qeContradicts  = entropyJitterRatio >= 1.08 && coldQE >= hotQE;
+
+      if (fieldTampered || qeContradicts) {
+        hardOverride       = 'vm';
+        entropyJitterScore = 0.0;
+        findings.push({
+          id:       'EJR_PHASE_HARD_KILL',
+          label:    fieldTampered
+            ? 'HARD KILL: stored EJR is inconsistent with cold/hot QE values — phase data tampered'
+            : 'HARD KILL: EJR ≥ 1.08 claims entropy growth but cold_QE ≥ hot_QE — physically impossible',
+          detail:   `ejr_stored=${entropyJitterRatio.toFixed(4)}  ` +
+                    `ejr_computed=${computedEJR?.toFixed(4) ?? 'n/a'}  ` +
+                    `cold_QE=${coldQE.toFixed(4)}  hot_QE=${hotQE.toFixed(4)}  ` +
+                    `delta=${computedEJR != null ? Math.abs(entropyJitterRatio - computedEJR).toFixed(4) : 'n/a'}`,
+          severity: 'critical',
+          penalty:  1.0,
+        });
+        penalty += 1.0;
+
+      } else {
+        // QE values confirmed consistent — proceed with normal EJR evaluation.
+        _evaluateEJR(entropyJitterRatio, coldQE, hotQE, findings, bonuses,
+                     (p) => { penalty += p; }, (b) => { bonus += b; },
+                     (s) => { entropyJitterScore = s; });
+      }
+
+    } else {
+      // QE values unavailable — evaluate EJR ratio in isolation.
+      _evaluateEJR(entropyJitterRatio, null, null, findings, bonuses,
+                   (p) => { penalty += p; }, (b) => { bonus += b; },
+                   (s) => { entropyJitterScore = s; });
     }
 
-    // Phase mean drift: real CPU heats up → iterations get slower
-    const coldToHotDrift = phases.hot.mean - phases.cold.mean;
-    if (coldToHotDrift > 0.05) {
-      bonuses.push({
-        id:    'THERMAL_DRIFT_CONFIRMED',
-        label: 'CPU mean timing increased from cold to hot phase (thermal drift)',
-        detail: `cold=${phases.cold.mean.toFixed(3)}ms  hot=${phases.hot.mean.toFixed(3)}ms  Δ=${coldToHotDrift.toFixed(3)}ms`,
-        value:  0.08,
-      });
-      bonus += 0.08;
+    // Phase mean drift: real CPU heats up → iterations get slower.
+    // Only apply if hard kill wasn't already triggered.
+    if (!hardOverride) {
+      const coldToHotDrift = (phases.hot?.mean ?? 0) - (phases.cold?.mean ?? 0);
+      if (coldToHotDrift > 0.05) {
+        bonuses.push({
+          id:    'THERMAL_DRIFT_CONFIRMED',
+          label: 'CPU mean timing increased from cold to hot phase (thermal drift)',
+          detail: `cold=${phases.cold.mean.toFixed(3)}ms  hot=${phases.hot.mean.toFixed(3)}ms  Δ=${coldToHotDrift.toFixed(3)}ms`,
+          value:  0.08,
+        });
+        bonus += 0.08;
+      }
     }
   }
 
@@ -250,33 +280,102 @@ export function runHeuristicEngine({ jitter, phases, autocorrelations }) {
     ? 0.22   // physical floor: cap compounding for clearly physical devices
     : 0.60;  // default: full penalty range for ambiguous or VM-like signals
 
-  const totalPenalty = Math.min(penaltyCap, penalty);
-  const totalBonus   = Math.min(0.35, bonus);
+  // HARD KILL overrides the physical floor protection entirely.
+  // The floor was designed to protect legitimate hardware with multiple
+  // marginal-but-honest signals — it must never shelter a forged proof.
+  const totalPenalty = hardOverride === 'vm'
+    ? Math.min(1.0, penalty)        // hard kill: uncapped, overwhelms all bonuses
+    : Math.min(penaltyCap, penalty); // normal: apply floor protection
+
+  // When a hard kill is active, strip all bonuses — they were earned on
+  // data that has been proved untrustworthy.
+  const totalBonus = hardOverride === 'vm' ? 0 : Math.min(0.35, bonus);
 
   return {
     penalty:             totalPenalty,
     bonus:               totalBonus,
     netAdjustment:       totalBonus - totalPenalty,
     findings,
-    bonuses,
+    bonuses:             hardOverride === 'vm' ? [] : bonuses,
     entropyJitterRatio,
     entropyJitterScore,
     picketFence,
+    hardOverride,
     coherenceFlags: findings.map(f => f.id),
   };
 }
 
 /**
  * @typedef {object} HeuristicReport
- * @property {number}   penalty           - total score penalty [0, 0.60]
- * @property {number}   bonus             - total score bonus   [0, 0.35]
- * @property {number}   netAdjustment     - bonus - penalty
- * @property {object[]} findings          - detected anomalies
- * @property {object[]} bonuses           - confirmed physical properties
+ * @property {number}      penalty             - total score penalty [0, 1.0]
+ * @property {number}      bonus               - total score bonus   [0, 0.35]
+ * @property {number}      netAdjustment       - bonus - penalty
+ * @property {object[]}    findings            - detected anomalies
+ * @property {object[]}    bonuses             - confirmed physical properties
  * @property {number|null} entropyJitterRatio
- * @property {object}   picketFence
- * @property {string[]} coherenceFlags
+ * @property {'vm'|null}   hardOverride        - set when a mathematical impossibility is detected
+ * @property {object}      picketFence
+ * @property {string[]}    coherenceFlags
  */
+
+// ---------------------------------------------------------------------------
+// EJR evaluation helper (extracted so it can run with or without QE values)
+// ---------------------------------------------------------------------------
+
+/**
+ * Applies the normal EJR classification logic (called only after the hard-kill
+ * check passes, meaning the EJR value has been verified as consistent).
+ */
+function _evaluateEJR(ejr, coldQE, hotQE, findings, bonuses, addPenalty, addBonus, setScore) {
+  const qeDetail = coldQE != null
+    ? `cold_QE=${coldQE.toFixed(3)}  hot_QE=${hotQE.toFixed(3)}`
+    : '';
+
+  if (ejr >= 1.08) {
+    setScore(1.0);
+    bonuses.push({
+      id:     'ENTROPY_GROWS_WITH_LOAD',
+      label:  'Entropy grew under load — thermal feedback confirmed',
+      detail: `ratio=${ejr.toFixed(3)}  ${qeDetail}`,
+      value:  0.12,
+    });
+    addBonus(0.12);
+
+  } else if (ejr >= 1.02) {
+    setScore(0.7);
+    findings.push({
+      id:       'ENTROPY_MILD_GROWTH',
+      label:    'Weak entropy growth under load',
+      detail:   `ratio=${ejr.toFixed(3)}  ${qeDetail}`,
+      severity: 'info',
+      penalty:  0,
+    });
+
+  } else if (ejr > 0.95) {
+    // Flat entropy — hypervisor clock unresponsive to guest load
+    setScore(0.2);
+    findings.push({
+      id:       'ENTROPY_FLAT_UNDER_LOAD',
+      label:    'Entropy did not grow under load — hypervisor clock suspected',
+      detail:   `ratio=${ejr.toFixed(3)}  (expected ≥ 1.08 for real hardware)  ${qeDetail}`,
+      severity: 'high',
+      penalty:  0.10,
+    });
+    addPenalty(0.10);
+
+  } else {
+    // Entropy DECREASED — hypervisor clock rounding became more aggressive
+    setScore(0.0);
+    findings.push({
+      id:       'ENTROPY_DECREASES_UNDER_LOAD',
+      label:    'Entropy shrank under load — hypervisor clock-rounding confirmed',
+      detail:   `ratio=${ejr.toFixed(3)}  (clock rounding more aggressive at high load)  ${qeDetail}`,
+      severity: 'critical',
+      penalty:  0.18,
+    });
+    addPenalty(0.18);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Picket Fence detector
@@ -322,6 +421,7 @@ function _empty() {
     penalty: 0, bonus: 0, netAdjustment: 0,
     findings: [], bonuses: [],
     entropyJitterRatio: null, entropyJitterScore: 0.5,
+    hardOverride: null,
     picketFence: { detected: false },
     coherenceFlags: [],
   };

@@ -375,6 +375,12 @@ export interface HeuristicReport {
   bonuses: PhysicalEvidence[];
   entropyJitterRatio: number | null;
   entropyJitterScore: number;
+  /**
+   * Set to 'vm' when a mathematical impossibility is detected in the phase data,
+   * specifically when the stored EJR value contradicts the stored QE values.
+   * This is a hard kill — isSynthetic returns true regardless of all other scores.
+   */
+  hardOverride: 'vm' | null;
   picketFence: {
     detected: boolean;
     dominantLag: number | null;

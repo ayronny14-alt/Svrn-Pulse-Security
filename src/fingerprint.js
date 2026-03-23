@@ -135,6 +135,7 @@ export class Fingerprint {
       entropyJitterRatio: heuristic.entropyJitterRatio,
       picketFence:        heuristic.picketFence.detected,
       coherenceFlags:     heuristic.coherenceFlags,
+      hardOverride:       heuristic.hardOverride,  // 'vm' | null
     };
     payload.provider = {
       id:               provider.providerId,
@@ -175,10 +176,13 @@ export class Fingerprint {
    * @type {boolean}
    */
   get isSynthetic() {
-    // Hard override from coherence stage (e.g. EJR/QE mathematical contradiction)
+    // Stage-2 hard kill: EJR/QE mathematical contradiction detected in the
+    // heuristic engine before any bonuses could accumulate.
+    if (this._raw.heuristic.hardOverride === 'vm') return true;
+    // Stage-3 hard kill: EJR/QE contradiction or phase forgery detected in
+    // the coherence analyser (second line of defence).
     if (this._raw.coherence.hardOverride === 'vm') return true;
-    // Final score uses stage-2 adjusted score refined by stage-3 coherence
-    // compared against the dynamic threshold (lower when more evidence collected)
+    // Normal path: final score vs dynamic threshold.
     return this._raw.finalScore < this._raw.coherence.dynamicThreshold;
   }
 

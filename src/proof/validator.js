@@ -212,18 +212,33 @@ export async function validateProof(payload, receivedHash, opts = {}) {
     }
   }
 
-  // Hard override from the client coherence stage (e.g. EJR/QE contradiction).
-  // If the client itself detected a mathematical impossibility and set hardOverride,
-  // reject immediately — a legitimate SDK never sets this on real hardware.
+  // Hard override from the client heuristic engine (stage 2).
+  // EJR_PHASE_HARD_KILL fires when the stored entropyJitterRatio is mathematically
+  // inconsistent with the stored cold_QE / hot_QE values — proof of tampering.
+  // A legitimate SDK running on real hardware never triggers this.
+  if (payload.heuristic?.hardOverride === 'vm') {
+    valid = false;
+    reasons.push(
+      `HEURISTIC_HARD_OVERRIDE: stage-2 EJR/QE mathematical contradiction — ` +
+      `${(payload.heuristic.coherenceFlags ?? []).join(', ')}`
+    );
+  }
+
+  // Hard override from the client coherence stage (stage 3).
+  // Second line of defence — catches the same contradiction via a different
+  // code path and also catches the phase-trajectory forgery variant.
   if (payload.coherence?.hardOverride === 'vm') {
     valid = false;
     reasons.push(
-      `COHERENCE_HARD_OVERRIDE: client stage-3 analysis detected a mathematical ` +
+      `COHERENCE_HARD_OVERRIDE: stage-3 analysis detected a mathematical ` +
       `impossibility — ${(payload.coherence.coherenceFlags ?? []).join(', ')}`
     );
   }
 
-  // Surface coherence flags for risk tracking
+  // Surface all coherence flags for risk tracking / audit logs
+  for (const flag of (payload.heuristic?.coherenceFlags ?? [])) {
+    riskFlags.push(`HEURISTIC:${flag}`);
+  }
   for (const flag of (payload.coherence?.coherenceFlags ?? [])) {
     riskFlags.push(`COHERENCE:${flag}`);
   }
