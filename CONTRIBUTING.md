@@ -1,4 +1,4 @@
-# Contributing to @sovereign/pulse
+# Contributing to @svrnsec/pulse
 
 Thank you for your interest in contributing.  This document covers how to get
 started, the coding standards we follow, and how to submit a pull request.
@@ -20,7 +20,7 @@ started, the coding standards we follow, and how to submit a pull request.
 
 ## Project Philosophy
 
-`@sovereign/pulse` is built on one principle: **hardware physics cannot lie**.
+`@svrnsec/pulse` is built on one principle: **hardware physics cannot lie**.
 
 Every contribution should preserve these invariants:
 

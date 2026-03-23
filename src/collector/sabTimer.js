@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — SharedArrayBuffer Microsecond Timer
+ * @svrnsec/pulse — SharedArrayBuffer Microsecond Timer
  *
  * Bypasses browser timer clamping (Brave 100µs cap, Firefox 20µs cap, Safari
  * 1ms cap) using Atomics.wait() which is exempt from clamping because it maps
@@ -38,7 +38,7 @@ export function isSabAvailable() {
     typeof SharedArrayBuffer !== 'undefined' &&
     typeof Atomics            !== 'undefined' &&
     typeof Atomics.wait       === 'function'  &&
-    crossOriginIsolated === true              // window flag set by COOP+COEP headers
+    typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated === true  // COOP+COEP headers
   );
 }
 

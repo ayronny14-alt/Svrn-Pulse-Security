@@ -1,4 +1,4 @@
-# @sovereign/pulse
+# @svrnsec/pulse
 
 [![CI](https://github.com/ayronny14-alt/Svrn-Pulse-Security/actions/workflows/ci.yml/badge.svg)](https://github.com/ayronny14-alt/Svrn-Pulse-Security/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@svrnsec/pulse.svg?style=flat)](https://www.npmjs.com/package/@svrnsec/pulse)
@@ -43,8 +43,10 @@ function TrustGate() {
 // Node.js — raw proof commitment
 import { pulse } from '@svrnsec/pulse';
 
-const proof = await pulse({ nonce: crypto.randomUUID() });
-console.log(proof.score, proof.confidence); // 0.798, 'high'
+const { payload, hash } = await pulse({ nonce: crypto.randomUUID() });
+// payload.classification.jitterScore → 0.798 (real hw) | 0.45 (VM)
+// payload.classification.flags      → [] (clean) | ['CV_TOO_HIGH_...'] (VM)
+// hash → SHA-256 commitment you send to your server for validation
 ```
 
 No API key. No account. No data leaves the client. Runs entirely in your infrastructure.
@@ -243,7 +245,7 @@ npm run build
 ### Client side
 
 ```js
-import { pulse } from '@sovereign/pulse';
+import { pulse } from '@svrnsec/pulse';
 
 // Get a nonce from your server (prevents replay attacks)
 const { nonce } = await fetch('/api/pulse/challenge').then(r => r.json());
@@ -271,7 +273,7 @@ const result = await fetch('/api/pulse/verify', {
 ### High-level `Fingerprint` class
 
 ```js
-import { Fingerprint } from '@sovereign/pulse';
+import { Fingerprint } from '@svrnsec/pulse';
 
 const fp = await Fingerprint.collect({ nonce });
 
@@ -296,7 +298,7 @@ fp.toCommitment()     // { payload, hash } — send to server
 ### Server side
 
 ```js
-import { validateProof, generateNonce } from '@sovereign/pulse/validator';
+import { validateProof, generateNonce } from '@svrnsec/pulse/validator';
 
 // Challenge endpoint — runs on your server, not ours
 app.get('/api/pulse/challenge', async (req, res) => {
@@ -319,7 +321,7 @@ app.post('/api/pulse/verify', async (req, res) => {
 ### Express middleware
 
 ```js
-import { createPulseMiddleware } from '@sovereign/pulse/middleware/express';
+import { createPulseMiddleware } from '@svrnsec/pulse/middleware/express';
 
 const pulse = createPulseMiddleware({
   threshold: 0.6,
@@ -337,11 +339,11 @@ app.post('/checkout', pulse.verify, handler); // req.pulse injected
 
 ```js
 // app/api/pulse/challenge/route.js
-import { pulseChallenge } from '@sovereign/pulse/middleware/next';
+import { pulseChallenge } from '@svrnsec/pulse/middleware/next';
 export const GET = pulseChallenge();
 
 // app/api/checkout/route.js
-import { withPulse } from '@sovereign/pulse/middleware/next';
+import { withPulse } from '@svrnsec/pulse/middleware/next';
 export const POST = withPulse({ threshold: 0.6 })(async (req) => {
   const { score, provider } = req.pulse;
   return Response.json({ ok: true, score });
@@ -351,7 +353,7 @@ export const POST = withPulse({ threshold: 0.6 })(async (req) => {
 ### React hook
 
 ```jsx
-import { usePulse } from '@sovereign/pulse/react';
+import { usePulse } from '@svrnsec/pulse/react';
 
 function Checkout() {
   const { run, stage, pct, vmConf, hwConf, result, isReady } = usePulse({
@@ -374,12 +376,12 @@ function Checkout() {
 Full declarations shipped in `index.d.ts`. Every interface, every callback, every return type:
 
 ```ts
-import { pulse, Fingerprint } from '@sovereign/pulse';
+import { pulse, Fingerprint } from '@svrnsec/pulse';
 import type {
   PulseOptions, PulseCommitment,
   ProgressMeta, PulseStage,
   ValidationResult, FingerprintReport,
-} from '@sovereign/pulse';
+} from '@svrnsec/pulse';
 
 const fp = await Fingerprint.collect({ nonce });
 // fp is fully typed — all properties, methods, and nested objects
@@ -443,7 +445,7 @@ If the heuristic engine says "this is a VM," the registry says "specifically, th
 You can extend the registry with a signature collected from any new environment:
 
 ```js
-import { serializeSignature, KNOWN_PROFILES } from '@sovereign/pulse/registry';
+import { serializeSignature, KNOWN_PROFILES } from '@svrnsec/pulse/registry';
 
 // After collecting a Fingerprint on the target machine:
 const sig = serializeSignature(fp, { name: 'AWS r7g.xlarge (Graviton3)', date: '2025-01' });

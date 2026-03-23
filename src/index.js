@@ -1,12 +1,12 @@
 /**
- * @sovereign/pulse
+ * @svrnsec/pulse
  *
  * Physical Turing Test — distinguishes a real consumer device with a human
  * operator from a sanitised Datacenter VM / AI Instance.
  *
  * Usage (client-side):
  *
- *   import { pulse } from '@sovereign/pulse';
+ *   import { pulse } from '@svrnsec/pulse';
  *
  *   // 1. Get a server-issued nonce (prevents replay attacks)
  *   const { nonce } = await fetch('/api/pulse-challenge').then(r => r.json());
@@ -22,7 +22,7 @@
  *
  * Usage (server-side):
  *
- *   import { validateProof, generateNonce } from '@sovereign/pulse/validator';
+ *   import { validateProof, generateNonce } from '@svrnsec/pulse/validator';
  *
  *   // Challenge endpoint
  *   app.get('/api/pulse-challenge', (req, res) => {
@@ -130,7 +130,7 @@ async function _pulseHosted(opts) {
 // ---------------------------------------------------------------------------
 
 /**
- * Run the full @sovereign/pulse probe and return a signed commitment.
+ * Run the full @svrnsec/pulse probe and return a signed commitment.
  *
  * Two modes:
  *   - pulse({ nonce })     — self-hosted (you manage the nonce server)
@@ -149,7 +149,7 @@ export async function pulse(opts = {}) {
   const { nonce } = opts;
   if (!nonce || typeof nonce !== 'string') {
     throw new Error(
-      '@sovereign/pulse: opts.nonce is required (self-hosted), or pass opts.apiKey for zero-config hosted mode.'
+      '@svrnsec/pulse: opts.nonce is required (self-hosted), or pass opts.apiKey for zero-config hosted mode.'
     );
   }
 
@@ -228,7 +228,7 @@ async function _runProbe(opts) {
   const [enfResult, gpuResult, dramResult, llmResult] = await Promise.all([
     collectEnfTimings().catch(() => null),
     collectGpuEntropy().catch(() => null),
-    collectDramTimings().catch(() => null),
+    Promise.resolve(collectDramTimings()).catch(() => null),
     Promise.resolve(detectLlmAgent(bioSnapshot)).catch(() => null),
   ]);
 

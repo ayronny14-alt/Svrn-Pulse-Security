@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — TypeScript Declarations
+ * @svrnsec/pulse — TypeScript Declarations
  */
 
 // =============================================================================
@@ -80,7 +80,7 @@ export interface PulseCommitment {
 export function pulse(opts: PulseOptions): Promise<PulseCommitment>;
 
 // =============================================================================
-// React Hook (import from '@sovereign/pulse/react')
+// React Hook (import from '@svrnsec/pulse/react')
 // =============================================================================
 
 export interface UsePulseOptions {
@@ -133,7 +133,7 @@ export interface UsePulseReturn {
   error: Error | null;
 }
 
-/** React hook — import from '@sovereign/pulse/react' */
+/** React hook — import from '@svrnsec/pulse/react' */
 export declare function usePulse(opts?: UsePulseOptions): UsePulseReturn;
 
 // =============================================================================

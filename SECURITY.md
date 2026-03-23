@@ -2,7 +2,7 @@
 
 ## Overview
 
-`@sovereign/pulse` is a hardware-physics fingerprinting library used as a security layer.
+`@svrnsec/pulse` is a hardware-physics fingerprinting library used as a security layer.
 We take vulnerabilities seriously and will respond promptly.
 
 ## Supported Versions
