@@ -1,12 +1,12 @@
 /**
- * @sovereign/pulse — Express Middleware
+ * @svrnsec/pulse — Express Middleware
  *
  * Drop-in middleware for Express / Fastify / Hono.
  * Handles the full challenge → verify flow in two lines of code.
  *
  * Usage:
  *
- *   import { createPulseMiddleware } from '@sovereign/pulse/middleware/express';
+ *   import { createPulseMiddleware } from '@svrnsec/pulse/middleware/express';
  *
  *   const pulse = createPulseMiddleware({ threshold: 0.6 });
  *

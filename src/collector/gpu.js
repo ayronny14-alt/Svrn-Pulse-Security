@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — WebGPU Thermal Variance Probe
+ * @svrnsec/pulse — WebGPU Thermal Variance Probe
  *
  * Runs a compute shader on the GPU and measures dispatch timing variance.
  *

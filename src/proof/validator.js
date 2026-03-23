@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Server-Side Validator
+ * @svrnsec/pulse — Server-Side Validator
  *
  * Verifies a ProofPayload + BLAKE3 commitment received from the client.
  * This module is for NODE.JS / SERVER use only.  It should NOT be bundled

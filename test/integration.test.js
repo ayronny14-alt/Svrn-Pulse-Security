@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Full Integration & Unit Test Suite
+ * @svrnsec/pulse — Full Integration & Unit Test Suite
  *
  * Run: npm test
  */

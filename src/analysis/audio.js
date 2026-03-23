@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — AudioContext Oscillator Jitter
+ * @svrnsec/pulse — AudioContext Oscillator Jitter
  *
  * Measures the scheduling jitter of the browser's audio pipeline.
  * Real audio hardware callbacks are driven by a hardware interrupt (IRQ)

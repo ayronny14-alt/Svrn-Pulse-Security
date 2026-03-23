@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Electrical Network Frequency (ENF) Detection
+ * @svrnsec/pulse — Electrical Network Frequency (ENF) Detection
  *
  * ┌─────────────────────────────────────────────────────────────────────────┐
  * │  WHAT THIS IS                                                           │

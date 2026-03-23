@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Adaptive Entropy Probe
+ * @svrnsec/pulse — Adaptive Entropy Probe
  *
  * Runs the WASM probe in batches and stops early once the signal is decisive.
  *

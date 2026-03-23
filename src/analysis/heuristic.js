@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Cross-Metric Heuristic Engine
+ * @svrnsec/pulse — Cross-Metric Heuristic Engine
  *
  * Instead of checking individual thresholds in isolation, this module looks
  * at the *relationships* between metrics. A sophisticated adversary can spoof

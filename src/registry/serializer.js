@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — SVRN Registry Signature Serializer
+ * @svrnsec/pulse — SVRN Registry Signature Serializer
  *
  * The registry is a crowdsourced database of device "Silicon Signatures" —
  * compact, privacy-safe profiles that characterise a device class rather than
@@ -19,7 +19,7 @@
  *   - Any user-identifiable information
  *
  * Usage:
- *   import { serializeSignature, matchRegistry, KNOWN_PROFILES } from '@sovereign/pulse/registry';
+ *   import { serializeSignature, matchRegistry, KNOWN_PROFILES } from '@svrnsec/pulse/registry';
  *
  *   const sig = serializeSignature(fingerprint);
  *   const match = matchRegistry(sig, KNOWN_PROFILES);

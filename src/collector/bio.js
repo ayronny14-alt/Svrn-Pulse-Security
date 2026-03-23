@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Bio-Binding Layer
+ * @svrnsec/pulse — Bio-Binding Layer
  *
  * Captures mouse-movement micro-stutters and keystroke-cadence dynamics
  * WHILE the hardware entropy probe is running.  Computes the

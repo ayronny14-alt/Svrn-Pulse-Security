@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Hypervisor & Cloud Provider Fingerprinter
+ * @svrnsec/pulse — Hypervisor & Cloud Provider Fingerprinter
  *
  * Each hypervisor has a distinct "steal-time rhythm" — a characteristic
  * pattern in how it schedules guest vCPUs on host physical cores.

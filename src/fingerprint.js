@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — High-Level Fingerprint Class
+ * @svrnsec/pulse — High-Level Fingerprint Class
  *
  * The developer-facing API.  Instead of forcing devs to understand Hurst
  * Exponents and Quantization Entropy, they get a Fingerprint object with
@@ -7,7 +7,7 @@
  *
  * Usage:
  *
- *   import { Fingerprint } from '@sovereign/pulse';
+ *   import { Fingerprint } from '@svrnsec/pulse';
  *
  *   const fp = await Fingerprint.collect({ nonce });
  *

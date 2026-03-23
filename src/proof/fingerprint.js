@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Hardware Fingerprint & Proof Builder
+ * @svrnsec/pulse — Hardware Fingerprint & Proof Builder
  *
  * Assembles all collected signals into a canonical ProofPayload, then
  * produces a BLAKE3 commitment: BLAKE3(canonicalJSON(payload)).

@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Node.js Demo
+ * @svrnsec/pulse — Node.js Demo
  *
  * Simulates the full client → server proof flow WITHOUT needing a browser
  * or compiled WASM.  Uses synthetic timing data so you can run this
@@ -154,7 +154,7 @@ async function consumeNonce(n) {
 
 async function runDemo() {
   console.clear();
-  console.log(W(G('\n  ██████ @sovereign/pulse — Node.js Demo')));
+  console.log(W(G('\n  ██████ @svrnsec/pulse — Node.js Demo')));
   console.log(DIM('  Physical Turing Test · Hardware-Biological Symmetry Protocol\n'));
 
   // ── Part 1: Jitter Analysis Comparison ────────────────────────────────────
@@ -328,7 +328,7 @@ async function runDemo() {
   const allPass = results.every(([, ok]) => ok);
   console.log();
   console.log(allPass
-    ? G('  ✓ All tests passed — @sovereign/pulse is working correctly')
+    ? G('  ✓ All tests passed — @svrnsec/pulse is working correctly')
     : R('  ✗ Some tests failed — check output above')
   );
   console.log();

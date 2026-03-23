@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Zero-Latency Second-Stage Coherence Analysis
+ * @svrnsec/pulse — Zero-Latency Second-Stage Coherence Analysis
  *
  * Runs entirely on data already collected by the entropy probe, bio
  * collector, canvas fingerprinter, and audio analyser.

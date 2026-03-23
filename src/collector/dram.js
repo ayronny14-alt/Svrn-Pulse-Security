@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — DRAM Refresh Cycle Detector
+ * @svrnsec/pulse — DRAM Refresh Cycle Detector
  *
  * DDR4 DRAM refreshes every 7.8 ms (tREFI per JEDEC JESD79-4). During a
  * refresh, the memory controller stalls all access requests for ~350 ns.

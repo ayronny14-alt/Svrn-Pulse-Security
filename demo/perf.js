@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Real Performance Benchmark
+ * @svrnsec/pulse — Real Performance Benchmark
  * Measures every stage of the pipeline with actual wall-clock timings.
  *
  *   node demo/perf.js
@@ -129,7 +129,7 @@ const MOCK_FP = {
 // =============================================================================
 
 console.clear();
-console.log(W(G('\n  @sovereign/pulse — Performance Benchmark')));
+console.log(W(G('\n  @svrnsec/pulse — Performance Benchmark')));
 console.log(D(`  ${new Date().toISOString()}  ·  Node.js ${process.version}\n`));
 
 // ── 1. Statistical Analysis ───────────────────────────────────────────────────

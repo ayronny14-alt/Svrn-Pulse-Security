@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Entropy Collector
+ * @svrnsec/pulse — Entropy Collector
  *
  * Bridges the Rust/WASM matrix-multiply probe into JavaScript.
  * The WASM module is lazily initialised once and cached for subsequent calls.

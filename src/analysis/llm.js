@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — LLM / AI Agent Behavioral Fingerprint
+ * @svrnsec/pulse — LLM / AI Agent Behavioral Fingerprint
  *
  * Detects automation driven by large language models, headless browsers
  * controlled by AI agents (AutoGPT, CrewAI, browser-use, Playwright+LLM,

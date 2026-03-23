@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — Statistical Jitter Analysis
+ * @svrnsec/pulse — Statistical Jitter Analysis
  *
  * Analyses the timing distribution from the entropy probe to classify
  * the host as a real consumer device or a sanitised datacenter VM.

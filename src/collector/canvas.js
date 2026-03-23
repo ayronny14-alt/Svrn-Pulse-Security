@@ -1,5 +1,5 @@
 /**
- * @sovereign/pulse — GPU Canvas Fingerprint
+ * @svrnsec/pulse — GPU Canvas Fingerprint
  *
  * Collects device-class signals from WebGL and 2D Canvas rendering.
  * The exact pixel values of GPU-rendered scenes are vendor/driver-specific

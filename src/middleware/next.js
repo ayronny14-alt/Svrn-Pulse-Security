@@ -1,12 +1,12 @@
 /**
- * @sovereign/pulse — Next.js App Router Middleware
+ * @svrnsec/pulse — Next.js App Router Middleware
  *
  * Works with Next.js App Router (13+) and Edge Runtime.
  *
  * ── Route Handler wrapper ──────────────────────────────────────────────────
  *
  *   // app/api/checkout/route.js
- *   import { withPulse } from '@sovereign/pulse/middleware/next';
+ *   import { withPulse } from '@svrnsec/pulse/middleware/next';
  *
  *   export const POST = withPulse({ threshold: 0.6 })(
  *     async (req) => {
@@ -18,7 +18,7 @@
  * ── Challenge endpoint (copy-paste ready) ─────────────────────────────────
  *
  *   // app/api/pulse/challenge/route.js
- *   import { pulseChallenge } from '@sovereign/pulse/middleware/next';
+ *   import { pulseChallenge } from '@svrnsec/pulse/middleware/next';
  *   export const GET = pulseChallenge();
  *
  * ── Edge-compatible nonce store ────────────────────────────────────────────

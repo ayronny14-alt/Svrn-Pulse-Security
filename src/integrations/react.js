@@ -1,7 +1,7 @@
 /**
- * @sovereign/pulse — React Hook
+ * @svrnsec/pulse — React Hook
  *
- * import { usePulse } from '@sovereign/pulse/react';
+ * import { usePulse } from '@svrnsec/pulse/react';
  *
  * const {
  *   run, reset,
