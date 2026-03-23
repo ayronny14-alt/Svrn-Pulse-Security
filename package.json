@@ -98,7 +98,7 @@
       "node":   "./src/analysis/coordinatedBehavior.js"
     }
   },
-  "main":   "dist/pulse.cjs.js",
+  "main":   "dist/pulse.cjs",
   "module": "dist/pulse.esm.js",
   "files": [
     "dist/",

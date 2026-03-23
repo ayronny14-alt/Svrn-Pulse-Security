@@ -188,14 +188,14 @@ export function createIdleMonitor(opts = {}) {
   // ── Browser event handlers ─────────────────────────────────────────────────
   const _onHide = () => _enterWatch();
   const _onShow = () => { if (_state !== State.ACTIVE) _commitOrReset(); };
+  const _onVisibilityChange = () => (document.hidden ? _onHide() : _onShow());
 
   // ── Public API ────────────────────────────────────────────────────────────
 
   /** Register browser event listeners. No-op in non-browser environments. */
   function start() {
     if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange',
-        () => (document.hidden ? _onHide() : _onShow()));
+      document.addEventListener('visibilitychange', _onVisibilityChange);
     }
     if (typeof window !== 'undefined') {
       window.addEventListener('blur',  _onHide);
@@ -209,7 +209,7 @@ export function createIdleMonitor(opts = {}) {
     clearTimeout(_watchTimer);
     clearInterval(_sampleTimer);
     if (typeof document !== 'undefined') {
-      document.removeEventListener('visibilitychange', _onHide);
+      document.removeEventListener('visibilitychange', _onVisibilityChange);
     }
     if (typeof window !== 'undefined') {
       window.removeEventListener('blur',  _onHide);

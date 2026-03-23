@@ -185,7 +185,8 @@ export async function verifyEngagementToken(tokenOrCompact, secret, opts = {}) {
   if (iat > now + 5_000) return _reject('token_from_future');
 
   // ── Signature verification (timing-safe comparison) ───────────────────────
-  const expected = _sign(token, secret);
+  const { sig: _discardSig, ...unsigned } = token;
+  const expected = _sign(unsigned, secret);
   if (!_timingSafeEqual(expected, sig)) {
     return _reject('invalid_signature');
   }

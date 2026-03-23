@@ -302,7 +302,7 @@ export function testDriftFingerprint(devices, opts = {}) {
 
   return {
     score: clamp(score, 0, 100),
-    driftRates: rateMap,
+    driftRates: Object.fromEntries(rateMap),
     largestCluster,
     clusterRatio: +clusterRatio.toFixed(4),
     uniqueBins,
@@ -513,6 +513,12 @@ function louvainLite(adjacency, n) {
   // Degree of each node
   const deg = adjacency.map(a => a.length);
 
+  // Incremental community degree map — O(1) lookup instead of O(n) scan
+  const commDeg = new Map();
+  for (let i = 0; i < n; i++) {
+    commDeg.set(i, deg[i]);
+  }
+
   // Single pass: try to move each node to its best neighbor's community
   let changed = true;
   let passes = 0;
@@ -535,8 +541,8 @@ function louvainLite(adjacency, n) {
 
       for (const [c, eic] of commEdges) {
         if (c === comm[i]) continue;
-        // Simplified modularity delta
-        const delta = eic / twoM - (deg[i] * communityDegree(comm, deg, c, n)) / (twoM * twoM);
+        const cDeg = commDeg.get(c) ?? 0;
+        const delta = eic / twoM - (deg[i] * cDeg) / (twoM * twoM);
         if (delta > bestDelta) {
           bestDelta = delta;
           bestComm = c;
@@ -544,6 +550,10 @@ function louvainLite(adjacency, n) {
       }
 
       if (bestComm !== comm[i]) {
+        // Update community degree map incrementally
+        const oldComm = comm[i];
+        commDeg.set(oldComm, (commDeg.get(oldComm) ?? 0) - deg[i]);
+        commDeg.set(bestComm, (commDeg.get(bestComm) ?? 0) + deg[i]);
         comm[i] = bestComm;
         changed = true;
       }
@@ -562,14 +572,6 @@ function louvainLite(adjacency, n) {
   Q /= twoM;
 
   return { communities: comm, modularity: Math.max(0, Q) };
-}
-
-function communityDegree(comm, deg, c, n) {
-  let sum = 0;
-  for (let i = 0; i < n; i++) {
-    if (comm[i] === c) sum += deg[i];
-  }
-  return sum;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

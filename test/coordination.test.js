@@ -234,11 +234,11 @@ describe('testDriftFingerprint', () => {
     expect(result.uniqueBins).toBeLessThan(result.totalDevices / 2);
   });
 
-  test('returns drift rate map', () => {
+  test('returns drift rate object', () => {
     const devices = organicDevices(10);
     const result = testDriftFingerprint(devices);
-    expect(result.driftRates).toBeInstanceOf(Map);
-    expect(result.driftRates.size).toBe(10);
+    expect(typeof result.driftRates).toBe('object');
+    expect(Object.keys(result.driftRates).length).toBe(10);
   });
 
   test('handles insufficient data', () => {
