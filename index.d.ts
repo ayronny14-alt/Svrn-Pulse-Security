@@ -586,3 +586,131 @@ export interface SignatureComparison {
   profileMatch: boolean;
   providerMatch: boolean;
 }
+
+// =============================================================================
+// Extended Signal Layer Types
+// =============================================================================
+
+// ── ENF (Electrical Network Frequency) ───────────────────────────────────────
+
+export interface EnfResult {
+  enfAvailable: boolean;
+  ripplePresent: boolean;
+  gridFrequency: 50 | 60 | null;
+  gridRegion: 'americas' | 'emea_apac' | 'unknown';
+  ripplePower: number;
+  snr50hz: number;
+  snr60hz: number;
+  enfDeviation: number | null;
+  sampleRateHz: number;
+  resolutionUs: number;
+  verdict: 'grid_60hz' | 'grid_50hz' | 'no_grid_signal' | 'grid_detected_region_unknown' | 'unavailable';
+  isVmIndicator: boolean;
+  temporalAnchor: {
+    nominalHz: number;
+    measuredRippleHz: number;
+    capturedAt: number;
+    gridHz: number;
+  } | null;
+  reason?: string;
+}
+
+export declare function collectEnfTimings(opts?: { iterations?: number }): Promise<EnfResult>;
+
+// ── WebGPU Thermal Variance ───────────────────────────────────────────────────
+
+export interface GpuEntropyResult {
+  gpuPresent: boolean;
+  isSoftware: boolean;
+  vendorString: string | null;
+  dispatchCV: number;
+  thermalGrowth: number;
+  verdict: 'real_gpu' | 'software_renderer' | 'no_webgpu' | 'ambiguous';
+}
+
+export declare function collectGpuEntropy(opts?: object): Promise<GpuEntropyResult>;
+
+// ── DRAM Refresh Cycle ────────────────────────────────────────────────────────
+
+export interface DramResult {
+  timings: number[];
+  refreshPeriodMs: number | null;
+  refreshPresent: boolean;
+  peakLag: number;
+  peakPower: number;
+  verdict: 'dram' | 'virtual' | 'ambiguous';
+}
+
+export declare function collectDramTimings(opts?: { iterations?: number; bufferMb?: number }): DramResult;
+
+// ── LLM / AI Agent Behavioral Fingerprint ─────────────────────────────────────
+
+export interface LlmResult {
+  aiConf: number;
+  thinkTimePattern: 'llm_latency_peak' | 'human_pareto' | 'unknown';
+  correctionRate: number;
+  rhythmicity: number;
+  pauseDistribution: 'uniform' | 'pareto' | 'unknown';
+  verdict: 'ai_agent' | 'human' | 'insufficient_data';
+  matchedModel: string | null;
+}
+
+export declare function detectLlmAgent(bioSnapshot: object): LlmResult;
+
+// ── SAB Microsecond Timer ─────────────────────────────────────────────────────
+
+export interface SabTimerResult {
+  isClamped: boolean;
+  clampAmountUs: number;
+  resolutionUs: number;
+}
+
+export declare function isSabAvailable(): boolean;
+export declare function collectHighResTimings(opts?: { iterations?: number; matrixSize?: number }): {
+  timings: number[];
+  resolutionUs: number;
+};
+
+// =============================================================================
+// Terminal / DX Utilities
+// =============================================================================
+
+export declare function renderProbeResult(opts: {
+  payload: ProofPayload;
+  hash: string;
+  result?: ValidationResult;
+  enf?: EnfResult | null;
+  gpu?: GpuEntropyResult | null;
+  dram?: DramResult | null;
+  llm?: LlmResult | null;
+  elapsedMs?: number;
+}): void;
+
+export declare function renderError(err: Error | string): void;
+export declare function renderInlineUpdateHint(latest: string): void;
+
+// =============================================================================
+// Version / Update Notifier
+// =============================================================================
+
+export declare const CURRENT_VERSION: string;
+
+export declare function checkForUpdate(opts?: {
+  silent?: boolean;
+  pkg?: string;
+}): Promise<{ current: string; latest: string | null; updateAvailable: boolean }>;
+
+export declare function notifyOnExit(opts?: { pkg?: string }): void;
+
+// =============================================================================
+// Extended PulseCommitment (includes extended signal layer results)
+// =============================================================================
+
+export interface ExtendedPulseCommitment extends PulseCommitment {
+  extended: {
+    enf:  EnfResult  | null;
+    gpu:  GpuEntropyResult | null;
+    dram: DramResult | null;
+    llm:  LlmResult  | null;
+  };
+}

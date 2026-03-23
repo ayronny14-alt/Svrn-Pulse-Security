@@ -1,6 +1,6 @@
 {
   "name": "@svrnsec/pulse",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Physical Turing Test — Hardware-Biological Symmetry Protocol distinguishing real consumer devices from sanitised datacenter VMs.",
   "type": "module",
   "license": "MIT",

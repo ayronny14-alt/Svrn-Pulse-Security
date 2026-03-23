@@ -54,9 +54,9 @@ export function blake3HexStr(str) {
  * @param {string}  p.nonce    – server-issued challenge nonce (hex)
  * @returns {ProofPayload}
  */
-export function buildProof({ entropy, jitter, bio, canvas, audio, nonce }) {
+export function buildProof({ entropy, jitter, bio, canvas, audio, enf, gpu, dram, llm, nonce }) {
   if (!nonce || typeof nonce !== 'string') {
-    throw new Error('@sovereign/pulse: nonce is required for anti-replay protection');
+    throw new Error('@svrnsec/pulse: nonce is required for anti-replay protection');
   }
 
   // Hash the raw timing arrays IN-BROWSER so we can prove their integrity
@@ -138,12 +138,68 @@ export function buildProof({ entropy, jitter, bio, canvas, audio, nonce }) {
         jitterMeanMs:         _round(audio.jitterMeanMs,        4),
         jitterP95Ms:          _round(audio.jitterP95Ms,         4),
       },
+
+      // ── Electrical Network Frequency ─────────────────────────────────────
+      enf: enf ? {
+        available:       enf.enfAvailable,
+        ripplePresent:   enf.ripplePresent,
+        gridFrequency:   enf.gridFrequency,
+        gridRegion:      enf.gridRegion,
+        ripplePower:     _round(enf.ripplePower,    4),
+        enfDeviation:    _round(enf.enfDeviation,   3),
+        snr50hz:         _round(enf.snr50hz,        2),
+        snr60hz:         _round(enf.snr60hz,        2),
+        sampleRateHz:    _round(enf.sampleRateHz,   1),
+        verdict:         enf.verdict,
+        isVmIndicator:   enf.isVmIndicator,
+        capturedAt:      enf.temporalAnchor?.capturedAt ?? null,
+      } : null,
+
+      // ── WebGPU thermal variance ───────────────────────────────────────────
+      gpu: gpu ? {
+        available:       gpu.gpuPresent,
+        isSoftware:      gpu.isSoftware,
+        vendorString:    gpu.vendorString,
+        dispatchCV:      _round(gpu.dispatchCV,     4),
+        thermalGrowth:   _round(gpu.thermalGrowth,  4),
+        verdict:         gpu.verdict,
+      } : null,
+
+      // ── DRAM refresh cycle ────────────────────────────────────────────────
+      dram: dram ? {
+        refreshPresent:  dram.refreshPresent,
+        refreshPeriodMs: _round(dram.refreshPeriodMs, 2),
+        peakPower:       _round(dram.peakPower,        4),
+        verdict:         dram.verdict,
+      } : null,
+
+      // ── LLM / AI agent behavioral fingerprint ────────────────────────────
+      llm: llm ? {
+        aiConf:             _round(llm.aiConf,            3),
+        thinkTimePattern:   llm.thinkTimePattern,
+        correctionRate:     _round(llm.correctionRate,    3),
+        rhythmicity:        _round(llm.rhythmicity,       3),
+        pauseDistribution:  llm.pauseDistribution,
+        verdict:            llm.verdict,
+        matchedModel:       llm.matchedModel ?? null,
+      } : null,
     },
 
-    // Top-level classification summary
+    // Top-level classification summary — all signal layers combined
     classification: {
-      jitterScore:  _round(jitter.score, 4),
-      flags:        jitter.flags ?? [],
+      jitterScore:    _round(jitter.score, 4),
+      flags:          jitter.flags ?? [],
+      enfVerdict:     enf?.verdict  ?? 'unavailable',
+      gpuVerdict:     gpu?.verdict  ?? 'unavailable',
+      dramVerdict:    dram?.verdict ?? 'unavailable',
+      llmVerdict:     llm?.verdict  ?? 'unavailable',
+      // Combined VM confidence: any hard signal raises this
+      vmIndicators: [
+        enf?.isVmIndicator  ? 'enf_no_grid'     : null,
+        gpu?.isSoftware     ? 'gpu_software'     : null,
+        dram?.verdict === 'virtual' ? 'dram_no_refresh' : null,
+        llm?.aiConf > 0.7   ? 'llm_agent'        : null,
+      ].filter(Boolean),
     },
   };
 

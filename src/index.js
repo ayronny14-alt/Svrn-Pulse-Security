@@ -44,12 +44,22 @@
  *   });
  */
 
-import { collectEntropy }          from './collector/entropy.js';
-import { BioCollector }            from './collector/bio.js';
-import { collectCanvasFingerprint }from './collector/canvas.js';
-import { collectAudioJitter }      from './analysis/audio.js';
-import { classifyJitter }          from './analysis/jitter.js';
+import { collectEntropy }           from './collector/entropy.js';
+import { BioCollector }             from './collector/bio.js';
+import { collectCanvasFingerprint } from './collector/canvas.js';
+import { collectAudioJitter }       from './analysis/audio.js';
+import { classifyJitter }           from './analysis/jitter.js';
 import { buildProof, buildCommitment } from './proof/fingerprint.js';
+import { collectGpuEntropy }        from './collector/gpu.js';
+import { collectDramTimings }       from './collector/dram.js';
+import { collectEnfTimings }        from './collector/enf.js';
+import { detectLlmAgent }       from './analysis/llm.js';
+import { notifyOnExit }             from './update-notifier.js';
+
+// Register background update check — fires once at process startup.
+// Shows a styled notification box after the process exits if a newer version
+// is available. No-op in browser environments and non-TTY outputs.
+notifyOnExit();
 
 // ---------------------------------------------------------------------------
 // Hosted API mode — pulse({ apiKey }) with zero server setup
@@ -206,25 +216,47 @@ async function _runProbe(opts) {
   const bioSnapshot = bio.snapshot(entropyResult.timings);
 
   if (requireBio && !bioSnapshot.hasActivity) {
-    throw new Error('@sovereign/pulse: no bio activity detected (requireBio=true)');
+    throw new Error('@svrnsec/pulse: no bio activity detected (requireBio=true)');
   }
 
   _emit(onProgress, 'bio_done');
 
-  // ── Phase 4: Jitter analysis ───────────────────────────────────────────────
+  // ── Phase 4: Extended signal collection (non-blocking, best-effort) ───────
+  // ENF, GPU, DRAM, and LLM detectors run in parallel after the core probe.
+  // Each gracefully returns a null/unavailable result if the environment does
+  // not support it (e.g. no WebGPU, no SharedArrayBuffer, no bio events).
+  const [enfResult, gpuResult, dramResult, llmResult] = await Promise.all([
+    collectEnfTimings().catch(() => null),
+    collectGpuEntropy().catch(() => null),
+    collectDramTimings().catch(() => null),
+    Promise.resolve(detectLlmAgent(bioSnapshot)).catch(() => null),
+  ]);
+
+  _emit(onProgress, 'extended_done', {
+    enf:  enfResult?.verdict,
+    gpu:  gpuResult?.verdict,
+    dram: dramResult?.verdict,
+    llm:  llmResult?.aiConf,
+  });
+
+  // ── Phase 5: Jitter analysis ───────────────────────────────────────────────
   const jitterAnalysis = classifyJitter(entropyResult.timings, {
     autocorrelations: entropyResult.autocorrelations,
   });
 
   _emit(onProgress, 'analysis_done');
 
-  // ── Phase 5: Build proof & commitment ─────────────────────────────────────
+  // ── Phase 6: Build proof & commitment ─────────────────────────────────────
   const payload    = buildProof({
     entropy: entropyResult,
     jitter:  jitterAnalysis,
     bio:     bioSnapshot,
     canvas:  canvasResult,
     audio:   audioResult,
+    enf:     enfResult,
+    gpu:     gpuResult,
+    dram:    dramResult,
+    llm:     llmResult,
     nonce,
   });
 
@@ -234,9 +266,13 @@ async function _runProbe(opts) {
     score:      jitterAnalysis.score,
     confidence: _scoreToLabel(jitterAnalysis.score),
     flags:      jitterAnalysis.flags,
+    enf:        enfResult?.verdict,
+    gpu:        gpuResult?.verdict,
+    dram:       dramResult?.verdict,
+    llmConf:    llmResult?.aiConf ?? null,
   });
 
-  return commitment;
+  return { ...commitment, extended: { enf: enfResult, gpu: gpuResult, dram: dramResult, llm: llmResult } };
 }
 
 /**
@@ -262,15 +298,27 @@ async function _runProbe(opts) {
 // ---------------------------------------------------------------------------
 
 // High-level developer API (the easiest way to use this package)
-export { Fingerprint }        from './fingerprint.js';
+export { Fingerprint }         from './fingerprint.js';
 
 // Analysis modules for advanced / custom integrations
-export { runHeuristicEngine } from './analysis/heuristic.js';
-export { detectProvider }     from './analysis/provider.js';
+export { runHeuristicEngine }  from './analysis/heuristic.js';
+export { detectProvider }      from './analysis/provider.js';
 
 // Server-side validation
-export { generateNonce }      from './proof/validator.js';
-export { validateProof }      from './proof/validator.js';
+export { generateNonce }       from './proof/validator.js';
+export { validateProof }       from './proof/validator.js';
+
+// Extended signal collectors (also available as named sub-path exports)
+export { collectGpuEntropy }   from './collector/gpu.js';
+export { collectDramTimings }  from './collector/dram.js';
+export { collectEnfTimings }   from './collector/enf.js';
+export { detectLlmAgent }  from './analysis/llm.js';
+
+// Terminal utilities — pretty probe results in Node.js server contexts
+export { renderProbeResult, renderError, renderInlineUpdateHint } from './terminal.js';
+
+// Version introspection
+export { CURRENT_VERSION, checkForUpdate } from './update-notifier.js';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
