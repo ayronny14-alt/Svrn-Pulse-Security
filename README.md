@@ -1,13 +1,53 @@
 # @sovereign/pulse
 
-[![CI](https://github.com/ayronny14-alt/Svrn-Pulse-Secturity/actions/workflows/ci.yml/badge.svg)](https://github.com/ayronny14-alt/Svrn-Pulse-Secturity/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/@sovereign/pulse.svg?style=flat)](https://www.npmjs.com/package/@sovereign/pulse)
+[![CI](https://github.com/ayronny14-alt/Svrn-Pulse-Security/actions/workflows/ci.yml/badge.svg)](https://github.com/ayronny14-alt/Svrn-Pulse-Security/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@svrnsec/pulse.svg?style=flat)](https://www.npmjs.com/package/@svrnsec/pulse)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Security Policy](https://img.shields.io/badge/security-policy-orange.svg)](./SECURITY.md)
 
 A hardware-physics probe that distinguishes real consumer silicon from sanitised cloud VMs and AI inference endpoints.
 
 It does not maintain a database of known bad actors. It measures thermodynamic constants.
+
+---
+
+## 30-Second Quickstart
+
+```bash
+npm install @svrnsec/pulse
+```
+
+```js
+// Express — drop-in server-side verification
+import { createPulseMiddleware } from '@svrnsec/pulse/middleware/express';
+
+app.use('/api', createPulseMiddleware({ minScore: 0.6 }));
+```
+
+```jsx
+// React — live probe with real-time signal meters
+import { usePulse } from '@svrnsec/pulse/react';
+
+function TrustGate() {
+  const { run, pct, vmConf, hwConf, earlyVerdict, result } = usePulse();
+
+  return (
+    <button onClick={run}>
+      {pct < 100 ? `Probing… ${pct}%` : earlyVerdict}
+    </button>
+  );
+}
+```
+
+```js
+// Node.js — raw proof commitment
+import { pulse } from '@svrnsec/pulse';
+
+const proof = await pulse({ nonce: crypto.randomUUID() });
+console.log(proof.score, proof.confidence); // 0.798, 'high'
+```
+
+No API key. No account. No data leaves the client. Runs entirely in your infrastructure.
 
 ---
 
@@ -180,7 +220,7 @@ The 192.222.57.254 VM hit the exit condition at iteration 50. The signal was con
 ## Installation
 
 ```bash
-npm install @sovereign/pulse
+npm install @svrnsec/pulse
 ```
 
 Node.js ≥ 18. The WASM binary is compiled from Rust and bundled — no separate `.wasm` file to host.
@@ -190,8 +230,8 @@ The package is self-contained. It does not phone home. It does not contact any e
 To build from source (requires [Rust](https://rustup.rs) and [wasm-pack](https://rustwasm.github.io/wasm-pack/)):
 
 ```bash
-git clone https://github.com/sovereign/pulse
-cd sovereign-pulse
+git clone https://github.com/ayronny14-alt/Svrn-Pulse-Security
+cd Svrn-Pulse-Security
 npm install
 npm run build
 ```
@@ -546,6 +586,34 @@ The server receives enough to verify the proof. Not enough to reconstruct any or
 - GPU passthrough VMs pass the canvas check. Timing is the primary discriminator in that case.
 - This is one signal among many. High-stakes applications should layer it with behavioral and network signals.
 - The heuristic engine catches unknown VMs via physics. The provider classifier labels them by scheduler signature. If a new hypervisor ships with an unusual quantum, it will be detected and flagged as `generic-vm` until the registry is updated.
+
+---
+
+## FAQ
+
+**Does it work with browser extensions installed (uBlock, Privacy Badger, 1Password)?**
+
+Yes. Extensions don't touch the physics layer. The core probe is thermal — it measures entropy growth via WASM matrix multiply timing across cold/load/hot CPU phases. Extensions cannot fake DRAM refresh variance or thermal noise on real silicon. Canvas signals (which some extensions do affect) are weighted inputs, not gates. The heuristic engine cross-validates across 5 independent signals, so no single channel can cause a false flag.
+
+**What about Brave's timer clamping?**
+
+Brave reduces `performance.now()` resolution to 100µs to prevent fingerprinting. We detect this via `timerGranularityMs` and adjust thresholds accordingly. A clamped timer on real hardware still shows thermal variance across phases. A VM with a clamped timer is still flat. The EJR check survives timer clamping — it's a ratio, not an absolute threshold.
+
+**Can a VM spoof this?**
+
+Spoofing one signal is straightforward. Spoofing all five simultaneously while keeping them mutually coherent with each other is a different problem. The Hurst-AC coherence check specifically catches data that was *generated* to look right rather than *measured* from real hardware — the two signals are physically linked and have to match each other, not just hit individual thresholds. See the [KVM example above](#the-picket-fence-detector) where four physical laws are violated simultaneously.
+
+**Does it collect or transmit any personal data?**
+
+No. Nothing leaves the browser except a ~1.6KB statistical summary with all raw signals BLAKE3-hashed. The server receives enough to verify the proof. Not enough to reconstruct any original signal or re-identify a user across sessions.
+
+**What's the performance overhead?**
+
+The probe takes 0.9–3.5 seconds depending on how quickly the signal converges. For obvious VMs it exits at 50 iterations (~0.9s). For real hardware it typically exits around 100–120 iterations (~2s). JavaScript overhead outside the probe itself is under 2ms. Best used on deliberate user actions (login, checkout) not page load.
+
+**Mobile support?**
+
+Mobile browsers cap `performance.now()` to 1ms resolution which reduces signal quality. The classifier adjusts thresholds and scores trend lower, but the directional verdict (VM vs. physical) remains accurate. The bio layer (touch timing, accelerometer jitter on supported devices) compensates partially.
 
 ---
 
