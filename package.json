@@ -1,5 +1,5 @@
 {
-  "name": "@sovereign/pulse",
+  "name": "@svrnsec/pulse",
   "version": "0.1.0",
   "description": "Physical Turing Test — Hardware-Biological Symmetry Protocol distinguishing real consumer devices from sanitised datacenter VMs.",
   "type": "module",
