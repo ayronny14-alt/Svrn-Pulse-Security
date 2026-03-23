@@ -30,6 +30,7 @@ import { collectCanvasFingerprint } from './collector/canvas.js';
 import { collectAudioJitter }       from './analysis/audio.js';
 import { classifyJitter }           from './analysis/jitter.js';
 import { runHeuristicEngine }       from './analysis/heuristic.js';
+import { runCoherenceAnalysis }     from './analysis/coherence.js';
 import { detectProvider }           from './analysis/provider.js';
 import { buildProof, buildCommitment, blake3HexStr } from './proof/fingerprint.js';
 
@@ -105,9 +106,23 @@ export class Fingerprint {
     const heuristic = runHeuristicEngine({ jitter, phases: entropy.phases, autocorrelations: entropy.autocorrelations });
     const provider  = detectProvider({ jitter, autocorrelations: entropy.autocorrelations, canvas, phases: entropy.phases });
 
-    // Final score: base jitter score adjusted by heuristic engine
+    // ── Three-stage scoring pipeline ──────────────────────────────────────
+    // Stage 1: base jitter score from timing distribution analysis
     const rawScore  = jitter.score;
+    // Stage 2: heuristic cross-metric coherence adjustment
     const adjScore  = Math.max(0, Math.min(1, rawScore + heuristic.netAdjustment));
+    // Stage 3: zero-latency structural coherence analysis on already-collected data
+    const coherence = runCoherenceAnalysis({
+      timings:  entropy.timings,
+      jitter,
+      phases:   entropy.phases  ?? null,
+      batches:  entropy.batches ?? null,
+      bio:      bioSnapshot,
+      canvas,
+      audio,
+    });
+    // Final score: stage-2 adjusted score refined by stage-3 coherence
+    const finalScore = Math.max(0, Math.min(1, adjScore + coherence.netAdjustment));
 
     emit('analysis_done');
 
@@ -128,15 +143,26 @@ export class Fingerprint {
       confidence:       provider.confidence,
       schedulerQuantum: provider.schedulerQuantumMs,
     };
-    payload.classification.adjustedScore = _round(adjScore, 4);
+    // Stage-3 coherence summary (server uses these for logging + dynamic threshold)
+    payload.coherence = {
+      netAdjustment:    coherence.netAdjustment,
+      dynamicThreshold: coherence.dynamicThreshold,
+      evidenceWeight:   coherence.evidenceWeight,
+      coherenceFlags:   coherence.coherenceFlags,
+      physicalFlags:    coherence.physicalFlags,
+      hardOverride:     coherence.hardOverride,
+    };
+    payload.classification.adjustedScore  = _round(adjScore,    4);
+    payload.classification.finalScore     = _round(finalScore,  4);
+    payload.classification.dynamicThreshold = coherence.dynamicThreshold;
 
     const commitment = buildCommitment(payload);
     emit('complete');
 
     return new Fingerprint({
       entropy, canvas, audio,
-      bioSnapshot, jitter, heuristic, provider,
-      rawScore, adjScore,
+      bioSnapshot, jitter, heuristic, coherence, provider,
+      rawScore, adjScore, finalScore,
       nonce, commitment,
     });
   }
@@ -149,7 +175,11 @@ export class Fingerprint {
    * @type {boolean}
    */
   get isSynthetic() {
-    return this._raw.adjScore < 0.55;
+    // Hard override from coherence stage (e.g. EJR/QE mathematical contradiction)
+    if (this._raw.coherence.hardOverride === 'vm') return true;
+    // Final score uses stage-2 adjusted score refined by stage-3 coherence
+    // compared against the dynamic threshold (lower when more evidence collected)
+    return this._raw.finalScore < this._raw.coherence.dynamicThreshold;
   }
 
   /**
@@ -157,18 +187,42 @@ export class Fingerprint {
    * @type {number}
    */
   get confidence() {
-    const s = this._raw.adjScore;
-    // Map score to confidence: 0.0→100 (certain VM), 0.5→0 (uncertain), 1.0→100 (certain physical)
-    return Math.round(Math.abs(s - 0.5) * 200);
+    const s = this._raw.finalScore;
+    const t = this._raw.coherence.dynamicThreshold;
+    // Map distance from threshold to confidence percentage.
+    // At the threshold: 0% confident. Far above/below: approaching 100%.
+    const distance = Math.abs(s - t);
+    return Math.min(100, Math.round(distance * 500));
   }
 
   /**
    * Normalised score [0.0, 1.0].  Higher = more physical.
-   * Adjusted by the heuristic engine's cross-metric checks.
+   * This is the FINAL score after all three analysis stages.
    * @type {number}
    */
   get score() {
-    return _round(this._raw.adjScore, 4);
+    return _round(this._raw.finalScore, 4);
+  }
+
+  /**
+   * The dynamic passing threshold for this proof [0.55, 0.67].
+   * Reflects how much evidence was collected — a full-evidence proof has a
+   * lower (more permissive) threshold; a minimal-evidence proof has a higher
+   * (more conservative) threshold.
+   * @type {number}
+   */
+  get threshold() {
+    return this._raw.coherence.dynamicThreshold;
+  }
+
+  /**
+   * How much evidence was collected [0, 1].
+   * 1.0 = 200 iterations + phased + bio + audio + canvas
+   * 0.0 = minimal proof
+   * @type {number}
+   */
+  get evidenceWeight() {
+    return this._raw.coherence.evidenceWeight;
   }
 
   /**
@@ -305,27 +359,41 @@ export class Fingerprint {
    * @returns {object}
    */
   metrics() {
-    const { jitter, heuristic, provider } = this._raw;
+    const { jitter, heuristic, coherence, provider } = this._raw;
     return {
-      score:              this.score,
-      adjustedScore:      _round(this._raw.adjScore, 4),
-      rawScore:           _round(this._raw.rawScore, 4),
-      heuristicAdjustment: _round(heuristic.netAdjustment, 4),
-      cv:                 _round(jitter.stats?.cv, 4),
-      hurstExponent:      _round(jitter.hurstExponent, 4),
-      quantizationEntropy: _round(jitter.quantizationEntropy, 4),
-      autocorrLag1:       _round(jitter.autocorrelations?.lag1, 4),
-      autocorrLag50:      _round(this._raw.entropy.autocorrelations?.lag50, 4),
-      outlierRate:        _round(jitter.outlierRate, 4),
-      thermalPattern:     jitter.thermalSignature?.pattern,
-      entropyJitterRatio: _round(heuristic.entropyJitterRatio, 4),
-      picketFence:        heuristic.picketFence.detected,
-      provider:           provider.providerLabel,
-      providerConfidence: provider.confidence,
-      schedulerQuantumMs: provider.schedulerQuantumMs,
-      webglRenderer:      this._raw.canvas?.webglRenderer,
-      isSoftwareRenderer: this._raw.canvas?.isSoftwareRenderer,
-      hardwareId:         this.hardwareId(),
+      // ── Final verdict ──────────────────────────────────────────────────
+      score:                this.score,           // final (stage 3)
+      threshold:            this.threshold,       // dynamic passing bar
+      evidenceWeight:       this.evidenceWeight,
+      isSynthetic:          this.isSynthetic,
+      // ── Score pipeline breakdown ───────────────────────────────────────
+      rawScore:             _round(this._raw.rawScore, 4),       // stage 1
+      adjustedScore:        _round(this._raw.adjScore, 4),       // stage 2
+      finalScore:           _round(this._raw.finalScore, 4),     // stage 3
+      heuristicAdjustment:  _round(heuristic.netAdjustment, 4),
+      coherenceAdjustment:  _round(coherence.netAdjustment, 4),
+      // ── Timing signals ─────────────────────────────────────────────────
+      cv:                   _round(jitter.stats?.cv, 4),
+      hurstExponent:        _round(jitter.hurstExponent, 4),
+      quantizationEntropy:  _round(jitter.quantizationEntropy, 4),
+      autocorrLag1:         _round(jitter.autocorrelations?.lag1, 4),
+      autocorrLag50:        _round(this._raw.entropy.autocorrelations?.lag50, 4),
+      outlierRate:          _round(jitter.outlierRate, 4),
+      thermalPattern:       jitter.thermalSignature?.pattern,
+      entropyJitterRatio:   _round(heuristic.entropyJitterRatio, 4),
+      picketFence:          heuristic.picketFence.detected,
+      // ── Coherence signals ──────────────────────────────────────────────
+      coherenceFlags:       coherence.coherenceFlags,
+      physicalFlags:        coherence.physicalFlags,
+      hardOverride:         coherence.hardOverride,
+      // ── Provider ───────────────────────────────────────────────────────
+      provider:             provider.providerLabel,
+      providerConfidence:   provider.confidence,
+      schedulerQuantumMs:   provider.schedulerQuantumMs,
+      // ── Hardware ───────────────────────────────────────────────────────
+      webglRenderer:        this._raw.canvas?.webglRenderer,
+      isSoftwareRenderer:   this._raw.canvas?.isSoftwareRenderer,
+      hardwareId:           this.hardwareId(),
     };
   }
 
@@ -334,20 +402,34 @@ export class Fingerprint {
    * @returns {object}
    */
   report() {
+    const { coherence } = this._raw;
     return {
       verdict: {
-        isSynthetic:  this.isSynthetic,
-        score:        this.score,
-        confidence:   this.confidence,
-        tier:         this.tier,
-        profile:      this.profile,
-        provider:     this.providerLabel,
-        topFlag:      this.topFlag,
+        isSynthetic:      this.isSynthetic,
+        score:            this.score,
+        threshold:        this.threshold,
+        confidence:       this.confidence,
+        tier:             this.tier,
+        profile:          this.profile,
+        provider:         this.providerLabel,
+        topFlag:          this.topFlag,
+        hardOverride:     coherence.hardOverride,
+        evidenceWeight:   this.evidenceWeight,
       },
-      metrics:         this.metrics(),
-      findings:        this.findings,
+      pipeline: {
+        rawScore:             _round(this._raw.rawScore,    4),
+        adjustedScore:        _round(this._raw.adjScore,    4),
+        finalScore:           _round(this._raw.finalScore,  4),
+        heuristicAdjustment:  _round(this._raw.heuristic.netAdjustment, 4),
+        coherenceAdjustment:  _round(coherence.netAdjustment, 4),
+        dynamicThreshold:     coherence.dynamicThreshold,
+      },
+      metrics:          this.metrics(),
+      findings:         this.findings,
       physicalEvidence: this.physicalEvidence,
-      phases:          this._raw.entropy.phases ? {
+      coherenceChecks:  coherence.checks,
+      coherenceBonuses: coherence.bonuses,
+      phases:           this._raw.entropy.phases ? {
         cold: { qe: _round(this._raw.entropy.phases.cold.qe, 4), mean: _round(this._raw.entropy.phases.cold.mean, 4) },
         hot:  { qe: _round(this._raw.entropy.phases.hot.qe,  4), mean: _round(this._raw.entropy.phases.hot.mean,  4) },
         entropyJitterRatio: _round(this._raw.entropy.phases.entropyJitterRatio, 4),

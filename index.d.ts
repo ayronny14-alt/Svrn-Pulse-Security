@@ -56,7 +56,7 @@ export interface ProgressMeta {
   /** Percentage complete (0–100). */
   pct?: number;
   /** Preliminary verdict from adaptive probe. */
-  earlyVerdict?: 'vm' | 'physical' | 'uncertain';
+  earlyVerdict?: 'vm' | 'physical' | 'borderline' | 'uncertain';
   /** Estimated milliseconds remaining. */
   etaMs?: number;
   /** Current VM confidence (0–1). */
@@ -120,7 +120,7 @@ export interface UsePulseReturn {
   /** Live HW confidence 0–1. */
   hwConf: number;
   /** Preliminary verdict from adaptive probe, or null if still uncertain. */
-  earlyVerdict: 'vm' | 'physical' | 'uncertain' | null;
+  earlyVerdict: 'vm' | 'physical' | 'borderline' | 'uncertain' | null;
   /** The BLAKE3 commitment. Available after probe completes. */
   proof: PulseCommitment | null;
   /** Server validation result. Available after verify completes (hosted/verifyUrl mode). */
@@ -150,8 +150,23 @@ export class Fingerprint {
   /** Confidence in the isSynthetic verdict (0–100). */
   readonly confidence: number;
 
-  /** Normalised score [0.0, 1.0]. Higher = more physical. */
+  /**
+   * Final normalised score [0.0, 1.0] after all three analysis stages.
+   * Higher = more physical.
+   */
   readonly score: number;
+
+  /**
+   * Dynamic passing threshold for this specific proof [0.55, 0.67].
+   * Lower when more evidence was collected; higher for minimal-evidence proofs.
+   */
+  readonly threshold: number;
+
+  /**
+   * Evidence weight [0, 1] — reflects how much data was collected.
+   * 1.0 = 200 iterations + phased + bio + audio + canvas
+   */
+  readonly evidenceWeight: number;
 
   /** Confidence tier. */
   readonly tier: 'high' | 'medium' | 'low' | 'uncertain';
@@ -233,10 +248,18 @@ export interface PhysicalEvidence {
 }
 
 export interface FingerprintMetrics {
-  score: number;
-  adjustedScore: number;
+  // Final verdict
+  score: number;           // stage-3 final score
+  threshold: number;       // dynamic passing threshold [0.55, 0.67]
+  evidenceWeight: number;  // how much evidence was collected [0, 1]
+  isSynthetic: boolean;
+  // Score pipeline
   rawScore: number;
+  adjustedScore: number;
+  finalScore: number;
   heuristicAdjustment: number;
+  coherenceAdjustment: number;
+  // Timing signals
   cv: number | null;
   hurstExponent: number | null;
   quantizationEntropy: number | null;
@@ -246,9 +269,15 @@ export interface FingerprintMetrics {
   thermalPattern: string | null;
   entropyJitterRatio: number | null;
   picketFence: boolean;
+  // Coherence signals
+  coherenceFlags: string[];
+  physicalFlags: string[];
+  hardOverride: 'vm' | null;
+  // Provider
   provider: string;
   providerConfidence: number;
   schedulerQuantumMs: number | null;
+  // Hardware
   webglRenderer: string | null;
   isSoftwareRenderer: boolean;
   hardwareId: string;
@@ -258,15 +287,28 @@ export interface FingerprintReport {
   verdict: {
     isSynthetic: boolean;
     score: number;
+    threshold: number;
     confidence: number;
     tier: string;
     profile: string;
     provider: string;
     topFlag: string;
+    hardOverride: 'vm' | null;
+    evidenceWeight: number;
+  };
+  pipeline: {
+    rawScore: number;
+    adjustedScore: number;
+    finalScore: number;
+    heuristicAdjustment: number;
+    coherenceAdjustment: number;
+    dynamicThreshold: number;
   };
   metrics: FingerprintMetrics;
   findings: HeuristicFinding[];
   physicalEvidence: PhysicalEvidence[];
+  coherenceChecks: CoherenceCheck[];
+  coherenceBonuses: CoherenceBonus[];
   phases: PhaseReport | null;
 }
 
@@ -398,6 +440,8 @@ export interface ProofPayload {
   classification: {
     jitterScore: number;
     adjustedScore?: number;
+    finalScore?: number;
+    dynamicThreshold?: number;
     flags: string[];
   };
   heuristic?: Record<string, unknown>;
@@ -408,7 +452,61 @@ export interface ProofPayload {
     confidence: number;
     schedulerQuantum: number | null;
   };
+  coherence?: {
+    netAdjustment: number;
+    dynamicThreshold: number;
+    evidenceWeight: number;
+    coherenceFlags: string[];
+    physicalFlags: string[];
+    hardOverride: 'vm' | null;
+  };
 }
+
+// =============================================================================
+// Coherence analysis (stage 3)
+// =============================================================================
+
+export interface CoherenceCheck {
+  id: string;
+  label: string;
+  severity: 'critical' | 'high' | 'medium' | 'info';
+  detail: string;
+  penalty: number;
+}
+
+export interface CoherenceBonus {
+  id: string;
+  label: string;
+  detail: string;
+  value: number;
+}
+
+export interface CoherenceReport {
+  penalty: number;
+  bonus: number;
+  netAdjustment: number;
+  checks: CoherenceCheck[];
+  bonuses: CoherenceBonus[];
+  hardOverride: 'vm' | null;
+  /** Dynamic threshold [0.55, 0.67] — lower when more evidence collected. */
+  dynamicThreshold: number;
+  /** Evidence weight [0, 1] */
+  evidenceWeight: number;
+  coherenceFlags: string[];
+  physicalFlags: string[];
+}
+
+export function runCoherenceAnalysis(opts: {
+  timings: number[];
+  jitter: JitterAnalysis;
+  phases?: PhasedData | null;
+  batches?: object[] | null;
+  bio?: object;
+  canvas?: CanvasFingerprint | null;
+  audio?: object;
+}): CoherenceReport;
+
+export function computeServerDynamicThreshold(payload: ProofPayload): number;
 
 // =============================================================================
 // Internal types (exported for advanced consumers)

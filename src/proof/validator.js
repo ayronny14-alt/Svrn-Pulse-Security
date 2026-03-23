@@ -23,6 +23,7 @@
 import { blake3 }        from '@noble/hashes/blake3';
 import { bytesToHex }    from '@noble/hashes/utils';
 import { canonicalJson } from './fingerprint.js';
+import { computeServerDynamicThreshold } from '../analysis/coherence.js';
 
 // ---------------------------------------------------------------------------
 // Known software / virtual renderer substring patterns (lowercase)
@@ -181,11 +182,50 @@ export async function validateProof(payload, receivedHash, opts = {}) {
     reasons.push(`JITTER_SCORE_TOO_LOW: ${jitterScore} < ${minJitterScore}`);
   }
 
+  // ── 4b. Dynamic threshold (evidence-proportional gate) ──────────────────
+  // The server independently computes the minimum passing score based on how
+  // much evidence the proof contains.  The client's dynamicThreshold field is
+  // NEVER trusted — it is only used for logging/auditing.
+  //
+  // Logic: a proof with only 50 iterations and no bio/audio faces a higher bar
+  // (0.62) than a full 200-iteration proof with phased data (0.50).
+  // This makes replay attacks with minimal proofs automatically fail the gate.
+  const serverDynamicMin = computeServerDynamicThreshold(payload);
+
+  // We check the FINAL client score (which includes stage-3 coherence adjustment)
+  // if it was included, otherwise fall back to the base jitterScore.
+  const finalClientScore = payload.classification?.finalScore ?? jitterScore;
+  if (finalClientScore < serverDynamicMin) {
+    valid = false;
+    reasons.push(
+      `DYNAMIC_THRESHOLD_NOT_MET: score=${finalClientScore} < ` +
+      `serverMin=${serverDynamicMin} (evidenceWeight=${
+        _computeEvidenceWeight(payload).toFixed(3)
+      })`
+    );
+  }
+
   // Surface diagnostic flags from the client's classifier
   for (const flag of (payload.classification?.flags ?? [])) {
     if (flag.includes('VM') || flag.includes('FLAT') || flag.includes('SYNTHETIC')) {
       riskFlags.push(`CLIENT_FLAG:${flag}`);
     }
+  }
+
+  // Hard override from the client coherence stage (e.g. EJR/QE contradiction).
+  // If the client itself detected a mathematical impossibility and set hardOverride,
+  // reject immediately — a legitimate SDK never sets this on real hardware.
+  if (payload.coherence?.hardOverride === 'vm') {
+    valid = false;
+    reasons.push(
+      `COHERENCE_HARD_OVERRIDE: client stage-3 analysis detected a mathematical ` +
+      `impossibility — ${(payload.coherence.coherenceFlags ?? []).join(', ')}`
+    );
+  }
+
+  // Surface coherence flags for risk tracking
+  for (const flag of (payload.coherence?.coherenceFlags ?? [])) {
+    riskFlags.push(`COHERENCE:${flag}`);
   }
 
   // ── 5. Canvas / WebGL renderer check ──────────────────────────────────────
@@ -388,4 +428,19 @@ function _reject(reasons) {
     riskFlags:  [],
     meta:       {},
   };
+}
+
+function _computeEvidenceWeight(payload) {
+  const n         = payload?.signals?.entropy?.iterations ?? 0;
+  const hasPhases = payload?.heuristic?.entropyJitterRatio != null;
+  const hasBio    = payload?.signals?.bio?.hasActivity === true;
+  const hasAudio  = payload?.signals?.audio?.available === true;
+  const hasCanvas = payload?.signals?.canvas?.available === true;
+  return Math.min(1.0,
+    Math.min(1.0, n / 200) * 0.65 +
+    (hasPhases ? 0.15 : 0) +
+    (hasBio    ? 0.10 : 0) +
+    (hasAudio  ? 0.05 : 0) +
+    (hasCanvas ? 0.05 : 0)
+  );
 }
