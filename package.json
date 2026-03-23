@@ -1,6 +1,6 @@
 {
   "name": "@svrnsec/pulse",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Physical Turing Test — Hardware-Biological Symmetry Protocol distinguishing real consumer devices from sanitised datacenter VMs.",
   "type": "module",
   "license": "MIT",
@@ -14,6 +14,9 @@
     "url": "https://github.com/ayronny14-alt/Svrn-Pulse-Security/issues"
   },
   "types": "index.d.ts",
+  "bin": {
+    "svrnsec-pulse": "./bin/svrnsec-pulse.js"
+  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
@@ -21,27 +24,38 @@
   "exports": {
     ".": {
       "browser": "./dist/pulse.esm.js",
-      "import": "./dist/pulse.esm.js",
+      "import":  "./dist/pulse.esm.js",
       "require": "./dist/pulse.cjs.js"
     },
     "./validator": {
-      "node": "./src/proof/validator.js",
+      "node":   "./src/proof/validator.js",
       "import": "./src/proof/validator.js"
+    },
+    "./challenge": {
+      "node":   "./src/proof/challenge.js",
+      "import": "./src/proof/challenge.js"
+    },
+    "./trust": {
+      "import": "./src/analysis/trustScore.js",
+      "node":   "./src/analysis/trustScore.js"
     },
     "./registry": {
       "import": "./src/registry/serializer.js",
-      "node": "./src/registry/serializer.js"
+      "node":   "./src/registry/serializer.js"
     },
     "./middleware/express": {
       "import": "./src/middleware/express.js",
-      "node": "./src/middleware/express.js"
+      "node":   "./src/middleware/express.js"
     },
     "./middleware/next": {
       "import": "./src/middleware/next.js",
-      "node": "./src/middleware/next.js"
+      "node":   "./src/middleware/next.js"
     },
     "./react": {
       "import": "./src/integrations/react.js"
+    },
+    "./react-native": {
+      "import": "./src/integrations/react-native.js"
     },
     "./gpu": {
       "import": "./src/collector/gpu.js"
@@ -59,38 +73,45 @@
       "import": "./src/collector/enf.js"
     }
   },
-  "main": "dist/pulse.cjs.js",
+  "main":   "dist/pulse.cjs.js",
   "module": "dist/pulse.esm.js",
   "files": [
     "dist/",
     "pkg/",
+    "bin/",
+    "src/",
     "index.d.ts",
-    "src/proof/validator.js",
-    "src/proof/fingerprint.js",
-    "src/middleware/express.js",
-    "src/middleware/next.js",
-    "src/registry/serializer.js",
-    "src/integrations/react.js",
     "SECURITY.md"
   ],
   "scripts": {
     "build:wasm": "bash build.sh",
-    "build:js": "rollup -c rollup.config.js",
-    "build": "npm run build:wasm && npm run build:js",
-    "dev": "rollup -c rollup.config.js --watch",
-    "test": "node --experimental-vm-modules ./node_modules/jest-cli/bin/jest.js",
-    "demo": "node demo/node-demo.js"
+    "build:js":   "rollup -c rollup.config.js",
+    "build":      "npm run build:wasm && npm run build:js",
+    "dev":        "rollup -c rollup.config.js --watch",
+    "test":       "node --experimental-vm-modules ./node_modules/jest-cli/bin/jest.js",
+    "demo":       "node demo/node-demo.js",
+    "scan":       "node bin/svrnsec-pulse.js scan"
   },
   "dependencies": {
     "@noble/hashes": "^1.4.0"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^25.0.0",
+    "@rollup/plugin-commonjs":     "^25.0.0",
     "@rollup/plugin-node-resolve": "^15.0.0",
-    "@rollup/plugin-wasm": "^6.2.2",
-    "@types/jest": "^29.0.0",
-    "jest": "^29.0.0",
-    "rollup": "^4.0.0"
+    "@rollup/plugin-wasm":         "^6.2.2",
+    "@types/jest":                 "^29.0.0",
+    "jest":                        "^29.0.0",
+    "rollup":                      "^4.0.0"
+  },
+  "peerDependencies": {
+    "react":        ">=17.0.0",
+    "react-native": ">=0.70.0",
+    "expo-sensors": ">=13.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react":        { "optional": true },
+    "react-native": { "optional": true },
+    "expo-sensors": { "optional": true }
   },
   "keywords": [
     "physical-turing-test",
@@ -105,7 +126,13 @@
     "dram-detection",
     "llm-detection",
     "ai-agent-detection",
-    "behavioral-biometrics"
+    "behavioral-biometrics",
+    "trust-score",
+    "hmac-challenge",
+    "react-native",
+    "mobile-security",
+    "enf-detection",
+    "cli"
   ],
   "engines": {
     "node": ">=18.0.0"

@@ -714,3 +714,133 @@ export interface ExtendedPulseCommitment extends PulseCommitment {
     llm:  LlmResult  | null;
   };
 }
+
+// =============================================================================
+// TrustScore
+// =============================================================================
+
+export interface TrustScoreBreakdown {
+  pts: number;
+  max: number;
+  [key: string]: unknown;
+}
+
+export interface TrustScorePenalty {
+  signal: string;
+  reason: string;
+  cap: number;
+}
+
+export interface TrustScoreBonus {
+  signal: string;
+  reason: string;
+  pts: number;
+}
+
+export interface TrustScore {
+  score: number;
+  grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  label: 'Trusted' | 'Verified' | 'Marginal' | 'Suspicious' | 'Blocked';
+  color: string;
+  hardCap: number | null;
+  breakdown: {
+    physics: TrustScoreBreakdown;
+    enf:     TrustScoreBreakdown;
+    gpu:     TrustScoreBreakdown;
+    dram:    TrustScoreBreakdown;
+    bio:     TrustScoreBreakdown;
+  };
+  penalties: TrustScorePenalty[];
+  bonuses:   TrustScoreBonus[];
+  signals: {
+    physics: number;
+    enf:     number;
+    gpu:     number;
+    dram:    number;
+    bio:     number;
+  };
+}
+
+export declare function computeTrustScore(
+  payload: ProofPayload,
+  extended?: { enf?: EnfResult; gpu?: GpuEntropyResult; dram?: DramResult; llm?: LlmResult }
+): TrustScore;
+
+export declare function formatTrustScore(ts: TrustScore): string;
+
+// =============================================================================
+// HMAC-Signed Challenge
+// =============================================================================
+
+export interface SignedChallenge {
+  nonce:     string;
+  issuedAt:  number;
+  expiresAt: number;
+  sig:       string;
+}
+
+export interface ChallengeVerifyResult {
+  valid:   boolean;
+  reason?: string;
+}
+
+export declare function createChallenge(
+  secret: string,
+  opts?: { ttlMs?: number; nonce?: string }
+): SignedChallenge;
+
+export declare function verifyChallenge(
+  challenge: SignedChallenge,
+  secret: string,
+  opts?: { checkNonce?: (nonce: string) => Promise<boolean> }
+): Promise<ChallengeVerifyResult>;
+
+export declare function embedChallenge(challenge: SignedChallenge, payload: ProofPayload): ProofPayload;
+export declare function extractChallenge(payload: ProofPayload): SignedChallenge;
+export declare function generateSecret(): string;
+
+// =============================================================================
+// React Native Hook
+// =============================================================================
+
+export interface TremorResult {
+  tremorPresent: boolean;
+  tremorPower:   number;
+  rmsNoise:      number;
+  sampleRate:    number;
+  gyroNoise:     number;
+  isStatic:      boolean;
+}
+
+export interface TouchAnalysis {
+  humanConf:    number;
+  dwellMean:    number;
+  dwellCV:      number;
+  sampleCount:  number;
+}
+
+export interface UsePulseNativeOptions {
+  challengeUrl?: string;
+  verifyUrl?:    string;
+  apiKey?:       string;
+  sensorMs?:     number;
+  autoRun?:      boolean;
+  onResult?:     (trustScore: TrustScore, proof: object) => void;
+  onError?:      (error: Error) => void;
+}
+
+export interface UsePulseNativeReturn {
+  run:         () => Promise<void>;
+  reset:       () => void;
+  isRunning:   boolean;
+  stage:       string | null;
+  pct:         number;
+  trustScore:  TrustScore | null;
+  tremor:      TremorResult | null;
+  touches:     TouchAnalysis | null;
+  proof:       object | null;
+  error:       Error | null;
+  panHandlers: object | null;
+}
+
+export declare function usePulseNative(opts?: UsePulseNativeOptions): UsePulseNativeReturn;
