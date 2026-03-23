@@ -5,7 +5,12 @@ node_modules/
 
 # Build output
 dist/
-pkg/
+
+# Compiled WASM artifacts (wasm-pack generates pkg/ from Rust source)
+# pkg/pulse_core.js is source — tracked above; only exclude compiled binaries
+pkg/*.wasm
+pkg/package.json
+pkg/.gitignore
 
 # Rust/WASM build artifacts
 crates/*/target/

@@ -2,34 +2,38 @@ import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import wasm     from '@rollup/plugin-wasm';
 
-// The WASM binary is inlined as base64 so the final bundle is a single file.
-// This avoids CORS issues and separate .wasm asset fetching.
+// inlineDynamicImports bundles everything into a single output file.
+// This sidesteps chunk-splitting for the dynamic `import('../analysis/jitter.js')`
+// inside the phased entropy path, and lets the wasm plugin inline the .wasm
+// binary as base64 without a separate asset file.
 
 export default [
-  // ESM build (for browsers and modern Node.js)
+  // ESM build — browsers and modern Node.js (type: "module")
   {
     input:   'src/index.js',
     output: {
-      file:   'dist/pulse.esm.js',
-      format: 'es',
-      sourcemap: true,
+      file:                 'dist/pulse.esm.js',
+      format:               'es',
+      sourcemap:            true,
+      inlineDynamicImports: true,
     },
     plugins: [
-      wasm(), // inlines .wasm as base64
+      wasm(),
       resolve({ browser: true }),
       commonjs(),
     ],
     external: [],
   },
 
-  // CJS build (for older Node.js / require() usage)
+  // CJS build — older Node.js / require() interop
   {
     input:   'src/index.js',
     output: {
-      file:      'dist/pulse.cjs.js',
-      format:    'cjs',
-      exports:   'named',
-      sourcemap: true,
+      file:                 'dist/pulse.cjs.js',
+      format:               'cjs',
+      exports:              'named',
+      sourcemap:            true,
+      inlineDynamicImports: true,
     },
     plugins: [
       wasm(),

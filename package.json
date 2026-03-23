@@ -7,11 +7,11 @@
   "author": "Aaron Miller",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ayronny14-alt/Svrn-Pulse-Secturity.git"
+    "url": "https://github.com/ayronny14-alt/Svrn-Pulse-Security.git"
   },
-  "homepage": "https://github.com/ayronny14-alt/Svrn-Pulse-Secturity#readme",
+  "homepage": "https://github.com/ayronny14-alt/Svrn-Pulse-Security#readme",
   "bugs": {
-    "url": "https://github.com/ayronny14-alt/Svrn-Pulse-Secturity/issues"
+    "url": "https://github.com/ayronny14-alt/Svrn-Pulse-Security/issues"
   },
   "types": "index.d.ts",
   "publishConfig": {
