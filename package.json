@@ -5,6 +5,19 @@
   "type": "module",
   "license": "MIT",
   "author": "Aaron Miller",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ayronny14-alt/Svrn-Pulse-Secturity.git"
+  },
+  "homepage": "https://github.com/ayronny14-alt/Svrn-Pulse-Secturity#readme",
+  "bugs": {
+    "url": "https://github.com/ayronny14-alt/Svrn-Pulse-Secturity/issues"
+  },
+  "types": "index.d.ts",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "exports": {
     ".": {
       "browser": "./dist/pulse.esm.js",
@@ -36,12 +49,14 @@
   "files": [
     "dist/",
     "pkg/",
+    "index.d.ts",
     "src/proof/validator.js",
     "src/proof/fingerprint.js",
     "src/middleware/express.js",
     "src/middleware/next.js",
     "src/registry/serializer.js",
-    "src/integrations/react.js"
+    "src/integrations/react.js",
+    "SECURITY.md"
   ],
   "scripts": {
     "build:wasm": "bash build.sh",

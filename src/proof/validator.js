@@ -76,15 +76,60 @@ export async function validateProof(payload, receivedHash, opts = {}) {
   const riskFlags = [];
   let   valid     = true;
 
-  // ── 0. Basic payload structure validation ─────────────────────────────────
-  if (!payload || typeof payload !== 'object') {
+  // ── 0. Strict payload structure validation ────────────────────────────────
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return _reject(['INVALID_PAYLOAD_STRUCTURE']);
   }
+
+  // Prototype pollution guard — reject any payload with __proto__ / constructor tricks
+  if (
+    Object.prototype.hasOwnProperty.call(payload, '__proto__') ||
+    Object.prototype.hasOwnProperty.call(payload, 'constructor') ||
+    Object.prototype.hasOwnProperty.call(payload, 'prototype')
+  ) {
+    return _reject(['PROTOTYPE_POLLUTION_ATTEMPT']);
+  }
+
+  // Required top-level fields
+  const REQUIRED_TOP = ['version', 'timestamp', 'nonce', 'signals', 'classification'];
+  for (const field of REQUIRED_TOP) {
+    if (!(field in payload)) {
+      return _reject([`MISSING_REQUIRED_FIELD:${field}`]);
+    }
+  }
+
+  // Type assertions on top-level scalars
+  if (typeof payload.version !== 'number')   return _reject(['INVALID_TYPE:version']);
+  if (typeof payload.timestamp !== 'number') return _reject(['INVALID_TYPE:timestamp']);
+  if (typeof payload.nonce !== 'string')     return _reject(['INVALID_TYPE:nonce']);
+  if (typeof payload.signals !== 'object' || Array.isArray(payload.signals)) {
+    return _reject(['INVALID_TYPE:signals']);
+  }
+  if (typeof payload.classification !== 'object' || Array.isArray(payload.classification)) {
+    return _reject(['INVALID_TYPE:classification']);
+  }
+
+  // Nonce must be a 64-character lowercase hex string (32 bytes)
+  if (!/^[0-9a-f]{64}$/.test(payload.nonce)) {
+    return _reject(['INVALID_NONCE_FORMAT']);
+  }
+
+  // Timestamp must be a plausible Unix ms value (> year 2020, < year 2100)
+  const TS_MIN = 1_577_836_800_000; // 2020-01-01
+  const TS_MAX = 4_102_444_800_000; // 2100-01-01
+  if (payload.timestamp < TS_MIN || payload.timestamp > TS_MAX) {
+    return _reject(['TIMESTAMP_OUT_OF_RANGE']);
+  }
+
   if (payload.version !== 1) {
     return _reject(['UNSUPPORTED_PROOF_VERSION']);
   }
 
   // ── 1. Hash integrity ─────────────────────────────────────────────────────
+  // receivedHash must be exactly 64 lowercase hex characters
+  if (typeof receivedHash !== 'string' || !/^[0-9a-f]{64}$/.test(receivedHash)) {
+    return _reject(['INVALID_HASH_FORMAT']);
+  }
   const canonical = canonicalJson(payload);
   const enc       = new TextEncoder().encode(canonical);
   const computed  = bytesToHex(blake3(enc));
@@ -247,15 +292,15 @@ export async function validateProof(payload, receivedHash, opts = {}) {
  *
  * @returns {string}  hex nonce
  */
-export function generateNonce() {
+export async function generateNonce() {
   const buf = new Uint8Array(32);
-  // Node.js crypto.getRandomValues (via globalThis) or the crypto module
   if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    // Browser + Node.js ≥ 19
     globalThis.crypto.getRandomValues(buf);
   } else {
-    // Node.js < 19 fallback
-    const { randomBytes } = require('node:crypto'); // eslint-disable-line
-    randomBytes(32).copy(Buffer.from(buf.buffer));
+    // Node.js 18 — webcrypto is at `crypto.webcrypto`
+    const { webcrypto } = await import('node:crypto');
+    webcrypto.getRandomValues(buf);
   }
   return bytesToHex(buf);
 }

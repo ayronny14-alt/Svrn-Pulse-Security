@@ -22,6 +22,27 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Api-Key'],
 }));
 
+// ── Security headers ───────────────────────────────────────────────────────
+app.use((_req, res, next) => {
+  // Prevent MIME-type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Disallow framing (clickjacking)
+  res.setHeader('X-Frame-Options', 'DENY');
+  // XSS protection for older browsers
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  // HSTS — 1 year, include subdomains
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // No Referer on cross-origin requests
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Tight CSP — this is a pure JSON API, no HTML served
+  res.setHeader('Content-Security-Policy', "default-src 'none'");
+  // Disable cross-origin resource access from browsers
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+  // Remove server fingerprint
+  res.removeHeader('X-Powered-By');
+  next();
+});
+
 app.use(express.json({ limit: '64kb' }));
 
 // Structured request logging

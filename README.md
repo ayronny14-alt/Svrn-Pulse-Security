@@ -1,5 +1,10 @@
 # @sovereign/pulse
 
+[![CI](https://github.com/ayronny14-alt/Svrn-Pulse-Secturity/actions/workflows/ci.yml/badge.svg)](https://github.com/ayronny14-alt/Svrn-Pulse-Secturity/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@sovereign/pulse.svg?style=flat)](https://www.npmjs.com/package/@sovereign/pulse)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Security Policy](https://img.shields.io/badge/security-policy-orange.svg)](./SECURITY.md)
+
 A hardware-physics probe that distinguishes real consumer silicon from sanitised cloud VMs and AI inference endpoints.
 
 It does not maintain a database of known bad actors. It measures thermodynamic constants.
