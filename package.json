@@ -1,6 +1,6 @@
 {
   "name": "@svrnsec/pulse",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Physical Turing Test — Hardware-Biological Symmetry Protocol distinguishing real consumer devices from sanitised datacenter VMs.",
   "type": "module",
   "license": "MIT",
@@ -21,30 +21,30 @@
   "exports": {
     ".": {
       "browser": "./dist/pulse.esm.js",
-      "import":  "./dist/pulse.esm.js",
+      "import": "./dist/pulse.esm.js",
       "require": "./dist/pulse.cjs.js"
     },
     "./validator": {
-      "node":   "./src/proof/validator.js",
+      "node": "./src/proof/validator.js",
       "import": "./src/proof/validator.js"
     },
     "./registry": {
       "import": "./src/registry/serializer.js",
-      "node":   "./src/registry/serializer.js"
+      "node": "./src/registry/serializer.js"
     },
     "./middleware/express": {
       "import": "./src/middleware/express.js",
-      "node":   "./src/middleware/express.js"
+      "node": "./src/middleware/express.js"
     },
     "./middleware/next": {
       "import": "./src/middleware/next.js",
-      "node":   "./src/middleware/next.js"
+      "node": "./src/middleware/next.js"
     },
     "./react": {
       "import": "./src/integrations/react.js"
     }
   },
-  "main":   "dist/pulse.cjs.js",
+  "main": "dist/pulse.cjs.js",
   "module": "dist/pulse.esm.js",
   "files": [
     "dist/",
@@ -60,22 +60,22 @@
   ],
   "scripts": {
     "build:wasm": "bash build.sh",
-    "build:js":   "rollup -c rollup.config.js",
-    "build":      "npm run build:wasm && npm run build:js",
-    "dev":        "rollup -c rollup.config.js --watch",
-    "test":       "node --experimental-vm-modules ./node_modules/jest-cli/bin/jest.js",
-    "demo":       "node demo/node-demo.js"
+    "build:js": "rollup -c rollup.config.js",
+    "build": "npm run build:wasm && npm run build:js",
+    "dev": "rollup -c rollup.config.js --watch",
+    "test": "node --experimental-vm-modules ./node_modules/jest-cli/bin/jest.js",
+    "demo": "node demo/node-demo.js"
   },
   "dependencies": {
     "@noble/hashes": "^1.4.0"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs":     "^25.0.0",
+    "@rollup/plugin-commonjs": "^25.0.0",
     "@rollup/plugin-node-resolve": "^15.0.0",
-    "@rollup/plugin-wasm":         "^6.2.2",
-    "@types/jest":                 "^29.0.0",
-    "jest":                        "^29.0.0",
-    "rollup":                      "^4.0.0"
+    "@rollup/plugin-wasm": "^6.2.2",
+    "@types/jest": "^29.0.0",
+    "jest": "^29.0.0",
+    "rollup": "^4.0.0"
   },
   "keywords": [
     "physical-turing-test",
