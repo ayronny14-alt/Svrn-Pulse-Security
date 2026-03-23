@@ -126,7 +126,13 @@ export async function collectEntropyAdaptive(wasmModule, opts = {}) {
           qe:           sig.qe,
           cv:           sig.cv,
           lag1:         sig.lag1,
-          earlyVerdict: sig.vmConf > 0.6 ? 'vm' : sig.hwConf > 0.6 ? 'physical' : 'uncertain',
+          // Thresholds: 0.70 — high enough that a legitimate device won't be
+        // shown a false early verdict from a noisy first batch.
+        // 'borderline' surfaces when one axis is moderate but not decisive.
+        earlyVerdict: sig.vmConf > 0.70 ? 'vm'
+          : sig.hwConf > 0.70 ? 'physical'
+          : (sig.vmConf > 0.45 || sig.hwConf > 0.45) ? 'borderline'
+          : 'uncertain',
         });
       } catch {}
     }

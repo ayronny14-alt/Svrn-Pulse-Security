@@ -92,11 +92,24 @@ export function classifyJitter(timings, opts = {}) {
   // 3. Quantization Entropy  (weight 0.20)
   //    High entropy → timings are spread, not clustered on fixed boundaries
   //    Low entropy  → values cluster on integer-ms ticks (legacy VM timer)
+  //
+  //    Scale:
+  //      QE ≥ 4.5  → 1.00  (strongly physical)
+  //      QE  3.0–4.5 → 0.00–1.00  (linear ramp, healthy range)
+  //      QE  2.0–3.0 → 0.00–0.20  (borderline; still gives partial credit so one
+  //                                 weak metric doesn't zero-out the whole score)
+  //      QE < 2.0  → 0.00  (clearly synthetic/quantised timer)
   let qeScore = 0;
   if (quantEnt >= 4.5) {
     qeScore = 1.0;
   } else if (quantEnt >= 3.0) {
-    qeScore = (quantEnt - 3.0) / 1.5;
+    qeScore = (quantEnt - 3.0) / 1.5;             // 0.00 → 1.00
+  } else if (quantEnt >= 2.0) {
+    // Partial credit — not obviously VM but not clearly physical.
+    // Lets other strong signals (CV, autocorr, Hurst) still carry the device
+    // over the physical threshold instead of being zeroed by a single weak metric.
+    qeScore = ((quantEnt - 2.0) / 1.0) * 0.20;   // 0.00 → 0.20
+    flags.push('LOW_QUANTIZATION_ENTROPY_BORDERLINE');
   } else {
     qeScore = 0;
     flags.push('LOW_QUANTIZATION_ENTROPY_SYNTHETIC_TIMER');

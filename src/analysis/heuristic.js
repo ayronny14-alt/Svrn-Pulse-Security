@@ -220,8 +220,37 @@ export function runHeuristicEngine({ jitter, phases, autocorrelations }) {
     penalty += 0.06;
   }
 
-  // ── Aggregate ─────────────────────────────────────────────────────────────
-  const totalPenalty = Math.min(0.60, penalty);
+  // ── Physical floor protection (anti-compounding) ──────────────────────────
+  // When the three PRIMARY timing metrics are clearly consistent with real
+  // silicon, cap the penalty so that marginal secondary signals (weak Picket
+  // Fence, mild EJR, slight skew anomaly) cannot compound into a rejection.
+  //
+  // Why: a modern i7 laptop running heavy browser extensions may show:
+  //   EJR = 1.01  → -0.10 penalty (just under the 1.02 threshold)
+  //   lag50 = 0.31 → picket fence → -0.08 penalty (background process rhythm)
+  //   slight negative skew → -0.06 penalty
+  //   total: -0.24, drops score from 0.73 → 0.49 → wrongly flagged as synthetic
+  //
+  // Solution: if ≥ 2 of the 3 primary metrics are unambiguously physical,
+  // treat the device as "probably physical with some noise" and limit the
+  // penalty to 0.22 (enough to lower confidence but not enough to reject).
+  const clearQE   = jitter.quantizationEntropy    > 3.2;
+  const clearCV   = stats.cv >= 0.05 && stats.cv <= 0.30;
+  const clearLag1 = Math.abs(autocorrelations?.lag1 ?? 1) < 0.22;
+  const clearPhysicalCount = [clearQE, clearCV, clearLag1].filter(Boolean).length;
+
+  // Also check: if at least one metric is a HARD VM indicator (QE < 2.0 or
+  // lag1 > 0.65), override the floor — the floor is for borderline noise, not
+  // for devices that are clearly VMs on at least one axis.
+  const hardVmSignal =
+    jitter.quantizationEntropy < 2.0 ||
+    Math.abs(autocorrelations?.lag1 ?? 0) > 0.65;
+
+  const penaltyCap = (!hardVmSignal && clearPhysicalCount >= 2)
+    ? 0.22   // physical floor: cap compounding for clearly physical devices
+    : 0.60;  // default: full penalty range for ambiguous or VM-like signals
+
+  const totalPenalty = Math.min(penaltyCap, penalty);
   const totalBonus   = Math.min(0.35, bonus);
 
   return {
