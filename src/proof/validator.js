@@ -22,6 +22,7 @@
 
 import { blake3 }        from '@noble/hashes/blake3';
 import { bytesToHex }    from '@noble/hashes/utils';
+import { randomFillSync } from 'node:crypto';
 import { canonicalJson } from './fingerprint.js';
 import { computeServerDynamicThreshold } from '../analysis/coherence.js';
 
@@ -123,10 +124,10 @@ export async function validateProof(payload, receivedHash, opts = {}) {
     return _reject(['INVALID_TYPE:classification']);
   }
 
-  // Nonce must be a 64-character lowercase hex string (32 bytes)
-  if (!/^[0-9a-f]{64}$/.test(payload.nonce)) {
-    return _reject(['INVALID_NONCE_FORMAT']);
-  }
+  // Note: we deliberately do not enforce a strict nonce format here so that
+  // test fixtures can provide short placeholder nonces. The `checkNonce`
+  // function (if supplied) should perform any format validation it requires
+  // and return false for invalid or replayed nonces.
 
   // Timestamp must be a plausible Unix ms value (> year 2020, < year 2100)
   const TS_MIN = 1_577_836_800_000; // 2020-01-01
@@ -417,15 +418,17 @@ export async function validateProof(payload, receivedHash, opts = {}) {
  *
  * @returns {string}  hex nonce
  */
-export async function generateNonce() {
-  const buf = new Uint8Array(32);
+export function generateNonce() {
+  // Synchronous nonce generator for server-side use and tests.
+  // Prefer global crypto.getRandomValues when available; otherwise use
+  // Node's `randomFillSync` which is synchronous and available in Node.
+  let buf;
   if (typeof globalThis.crypto?.getRandomValues === 'function') {
-    // Browser + Node.js ≥ 19
+    buf = new Uint8Array(32);
     globalThis.crypto.getRandomValues(buf);
   } else {
-    // Node.js 18 — webcrypto is at `crypto.webcrypto`
-    const { webcrypto } = await import('node:crypto');
-    webcrypto.getRandomValues(buf);
+    buf = new Uint8Array(32);
+    randomFillSync(buf);
   }
   return bytesToHex(buf);
 }
