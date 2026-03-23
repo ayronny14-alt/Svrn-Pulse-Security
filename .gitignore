@@ -21,6 +21,7 @@ target/
 .env.local
 .env.production
 server/.env
+.npmrc
 
 # OS
 .DS_Store

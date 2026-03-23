@@ -1,0 +1,4 @@
+@svrnsec:registry=https://registry.npmjs.org/
+//registry.npmjs.org/:_authToken=YOUR_NPM_TOKEN_HERE
+
+# Do NOT commit a file with your real token. Use this file as a template only.
