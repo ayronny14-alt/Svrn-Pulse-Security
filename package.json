@@ -1,6 +1,6 @@
 {
   "name": "@svrnsec/pulse",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Physical Turing Test — Hardware-Biological Symmetry Protocol distinguishing real consumer devices from sanitised datacenter VMs.",
   "type": "module",
   "license": "MIT",
@@ -42,6 +42,18 @@
     },
     "./react": {
       "import": "./src/integrations/react.js"
+    },
+    "./gpu": {
+      "import": "./src/collector/gpu.js"
+    },
+    "./dram": {
+      "import": "./src/collector/dram.js"
+    },
+    "./llm": {
+      "import": "./src/analysis/llm.js"
+    },
+    "./timer": {
+      "import": "./src/collector/sabTimer.js"
     }
   },
   "main": "dist/pulse.cjs.js",
@@ -85,7 +97,12 @@
     "zero-knowledge",
     "anti-vm",
     "jitter-analysis",
-    "blake3"
+    "blake3",
+    "webgpu",
+    "dram-detection",
+    "llm-detection",
+    "ai-agent-detection",
+    "behavioral-biometrics"
   ],
   "engines": {
     "node": ">=18.0.0"
