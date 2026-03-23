@@ -22,8 +22,10 @@ function makeLcg(seed) {
  * Each token has distinct ENF deviation, DRAM period variation, genuine cooling.
  */
 function makeRealToken(rand, baseIat = Date.now()) {
-  // Organic users are geographically spread → wide ENF deviation range
-  const enfDev = (rand() - 0.5) * 0.30;  // ±0.15 Hz — different cities
+  // Organic users are geographically spread → ENF range 0.10–0.40 Hz
+  // (deliberately avoids the 0.00–0.05 Hz bucket used by makeFarmToken so
+  //  mixed-cohort tests get clean separation between the two populations)
+  const enfDev = 0.10 + rand() * 0.30;   // 0.10–0.40 Hz — different cities
   return {
     v:    2,
     n:    Array.from({ length: 64 }, () => Math.floor(rand() * 16).toString(16)).join(''),

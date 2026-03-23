@@ -208,25 +208,28 @@ function _clusterTokens(tokens) {
 }
 
 function _clusterKey(token) {
-  const hw   = token.hw   ?? {};
-  const idle = token.idle ?? {};
-  const iat  = token.iat  ?? 0;
+  const hw  = token.hw ?? {};
+  const iat = token.iat ?? 0;
 
   // ENF deviation → nearest bucket (null/undefined → 'no_enf')
+  // ±0.025 Hz resolution localizes devices to the same building/substation.
   const enfBucket = hw.enfDev != null
     ? `e${Math.round(hw.enfDev / ENF_BUCKET_HZ)}`
     : 'no_enf';
 
-  // DRAM verdict string
-  const dram  = hw.dram  ?? 'unknown';
+  // DRAM verdict string — proxy for hardware generation
+  const dram = hw.dram ?? 'unknown';
 
-  // Thermal transition label
-  const therm = idle.therm ?? 'unknown';
-
-  // 10-minute time bucket
+  // 10-minute time bucket — captures batch dispatch without splitting organic traffic
   const tBucket = Math.floor(iat / TIME_BUCKET_MS);
 
-  return `${enfBucket}:${dram}:${therm}:${tBucket}`;
+  // Note: thermal label is intentionally NOT part of the key.
+  // Clustering by thermal label would make testThermalDiversity a tautology
+  // (every cluster would have zero diversity by construction).
+  // Thermal diversity is left as a within-cluster discriminator — farms that
+  // co-locate in the same ENF + DRAM + time bucket will still show sustained_hot
+  // homogeneity; organic users in the same bucket will show hot_to_cold / cooling mix.
+  return `${enfBucket}:${dram}:${tBucket}`;
 }
 
 // ── Bootstrap CI ──────────────────────────────────────────────────────────────

@@ -53,8 +53,8 @@ export const KNOWN_PROFILES = [
   },
   {
     id:       'kvm-vps-ubuntu22-2vcpu',
-    name:     'KVM VPS / Ubuntu 22.04 / 2 vCPU (192.222.57.254)',
-    class:    'cloud-vm-budget',
+    name:     'KVM VM / Ubuntu 22.04 / 12 vCPU / 480GB RAM / NVIDIA GH200 Grace Hopper (192.222.57.254)',
+    class:    'datacenter-gpu-highend',
     profile:  'picket-fence',
     provider: 'kvm-generic',
     metrics: {

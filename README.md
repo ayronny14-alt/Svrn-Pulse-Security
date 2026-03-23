@@ -84,7 +84,7 @@ hotQE / coldQE  ≥ 1.08  →  thermal feedback confirmed (real silicon)
 hotQE / coldQE  ≈ 1.00  →  clock is insensitive to guest thermal state (VM)
 ```
 
-A KVM hypervisor maintains a synthetic clock that ticks at a constant rate regardless of what the guest OS is doing. Its entropy ratio across cold/load/hot phases is flat. On 192.222.57.254 it measured 1.01. On the local GTX 1650 Super machine it measured 1.24.
+A KVM hypervisor maintains a synthetic clock that ticks at a constant rate regardless of what the guest OS is doing. Its entropy ratio across cold/load/hot phases is flat. On 192.222.57.254 — a 12 vCPU / 480GB RAM / GH200 Grace Hopper machine — it measured 1.01. On the local GTX 1650 Super machine it measured 1.24.
 
 A software implementation cannot fake this without generating actual heat.
 
@@ -98,7 +98,7 @@ If you measure H=0.5 but find high autocorrelation — or low H but low autocorr
 
 High coefficient of variation (timing spread) must come from a genuinely spread-out distribution, which means high quantization entropy. A VM that inflates CV by adding synthetic outliers at fixed offsets — say, every 50th iteration triggers a steal-time burst — produces high CV but low entropy because 93% of samples still fall in two bins.
 
-From 192.222.57.254: CV=0.0829 (seems variable) but QE=1.27 bits (extreme clustering). Incoherent. On real hardware, CV=0.1494 → QE=3.59 bits. Coherent.
+From 192.222.57.254 (GH200): CV=0.0829 (seems variable) but QE=1.27 bits (extreme clustering). Incoherent. On real hardware, CV=0.1494 → QE=3.59 bits. Coherent.
 
 ### 4. The Picket Fence Detector
 
@@ -158,7 +158,7 @@ Normal bell curve, right-tailed from OS preemptions. Exactly what Brownian timin
 
 ---
 
-### Remote VM — 192.222.57.254 — KVM · 2 vCPU · 2GB · Ubuntu 22.04
+### Remote VM — 192.222.57.254 — KVM · 12 vCPU · 480GB RAM · NVIDIA GH200 Grace Hopper · Ubuntu 22.04
 
 ```
 Pulse Score  [██████████████████░░░░░░░░░░░░░░░░░░░░░░] 45.0%
@@ -213,7 +213,7 @@ Physical desktop       ~120        ~2.1s       40%
 Ambiguous              200         ~3.5s        —
 ```
 
-The 192.222.57.254 VM hit the exit condition at iteration 50. The signal was conclusive within the first batch.
+The 192.222.57.254 GH200 VM hit the exit condition at iteration 50. 480GB of RAM and a Grace Hopper Superchip cannot change the fact that the hypervisor clock is mathematically perfect. The signal was conclusive within the first batch.
 
 ---
 
@@ -455,6 +455,182 @@ The detection engine doesn't need updates when new hardware ships. The registry 
 
 ---
 
+---
+
+## TrustScore — Unified 0–100 Human Score
+
+The TrustScore engine converts all physical signals into a single integer that security teams can threshold, dashboard, and alert on.
+
+```js
+import { computeTrustScore, formatTrustScore } from '@svrnsec/pulse/trust';
+
+const ts = computeTrustScore(payload, { enf, gpu, dram, llm, idle });
+// → { score: 87, grade: 'B', label: 'Verified', hardCap: null, breakdown: {...} }
+
+console.log(formatTrustScore(ts));
+// → "TrustScore 87/100  B · Verified  [physics:91% enf:80% gpu:100% dram:87% bio:70%]"
+```
+
+**Signal weights:** Physics layer 40pts · ENF 20pts · GPU 15pts · DRAM 15pts · Bio/LLM 10pts
+
+**Hard floors** that bonus points cannot override:
+
+| Condition | Cap | Why |
+|---|---|---|
+| EJR forgery detected | 20 | Physics law violated |
+| Software GPU renderer | 45 | Likely VM/container |
+| LLM agent conf > 0.85 | 30 | AI-driven session |
+| No bio + no ENF | 55 | Cannot confirm human on real device |
+
+---
+
+## Proof-of-Idle — Defeating Click Farms at the Physics Layer
+
+Click farms run 1,000 real phones at sustained maximum throughput. Browser fingerprinting cannot catch them — they ARE real devices.
+
+The physics: a real device between interactions cools via Newton's Law of Cooling — a smooth exponential variance decay. A farm script pausing to fake idle drops CPU load from 100% to 0% instantly, producing a step function in the timing variance. You cannot fake a cooling curve faster than real time.
+
+```js
+import { createIdleMonitor } from '@svrnsec/pulse/idle';
+
+// Browser — hooks visibilitychange and blur/focus automatically
+const monitor = createIdleMonitor();
+monitor.start();
+
+// When user triggers an engagement action:
+const idleProof = monitor.getProof(); // null if device never genuinely rested
+
+// Node.js / React Native — manual control
+monitor.declareIdle();
+monitor.declareActive();
+```
+
+**Thermal transition taxonomy:**
+
+| Label | Meaning | Farm? |
+|---|---|---|
+| `hot_to_cold` | Smooth exponential variance decay | No — genuine cooling |
+| `cold` | Device already at rest temperature | No — genuine idle |
+| `cooling` | Mild ongoing decay | No |
+| `step_function` | >75% variance drop in first interval | Yes — script paused |
+| `sustained_hot` | No cooling at all during idle period | Yes — constant load |
+
+**TrustScore impact:** `hot_to_cold` → +8pts bonus. `step_function` → hard cap 65. `sustained_hot` → hard cap 60.
+
+The hash chain (`SHA-256(prevHash ‖ ts ‖ meanMs ‖ variance)`) proves samples were taken in sequence at real intervals. N nodes at 30-second spacing = (N−1)×30s minimum elapsed time — cannot be back-filled faster than real time.
+
+---
+
+## Population Entropy — Sybil Detection at Cohort Level
+
+One fake account is hard to detect. A warehouse of 1,000 phones running the same script is statistically impossible to hide.
+
+```js
+import { analysePopulation } from '@svrnsec/pulse/population';
+
+const verdict = analysePopulation(tokenCohort);
+// → { authentic: false, sybilScore: 84, flags: ['TIMESTAMP_RHYTHM', 'THERMAL_HOMOGENEOUS'], ... }
+```
+
+Five independent statistical tests on a cohort of engagement tokens:
+
+| Test | What it catches | Farm signal |
+|---|---|---|
+| Timestamp rhythm | Lag-1/lag-2 autocorrelation of arrival times | Farms dispatch in clock-timed batches |
+| Entropy dispersion | CV of physics scores across cohort | Cloned VMs are too similar (CV < 0.04) |
+| Thermal diversity | Shannon entropy of transition labels | 1,000 phones → same thermal state |
+| Idle plausibility | Clustering of idle durations | Scripts always pause for the same duration |
+| ENF phase coherence | Variance of grid frequency deviations | Co-located devices share the same circuit |
+
+`sybilScore < 40 = authentic cohort`. Coordinated farms score 80+.
+
+---
+
+## Engagement Tokens — 30-Second Physics-Backed Proof
+
+A short-lived cryptographic token that proves a specific engagement event originated from a real human on real hardware that had genuinely rested between interactions.
+
+```js
+import { createEngagementToken, verifyEngagementToken } from '@svrnsec/pulse/engage';
+
+// Client — after the interaction
+const { compact } = createEngagementToken({
+  pulseResult,
+  idleProof: monitor.getProof(),
+  interaction: { type: 'click', ts: Date.now(), motorConsistency: 0.82 },
+  secret: process.env.PULSE_SECRET,
+});
+// Attach to API call: X-Pulse-Token: <compact>
+
+// Server — before crediting any engagement metric
+const result = await verifyEngagementToken(compact, process.env.PULSE_SECRET, {
+  checkNonce: (n) => redis.del(`pulse:nonce:${n}`).then(d => d === 1),
+});
+// result.valid, result.riskSignals, result.idleWarnings
+```
+
+**What the token proves:**
+
+1. Real hardware — DRAM refresh present, ENF grid signal detected
+2. Genuine idle — Hash-chained thermal measurements spanning ≥ 45s
+3. Physical cooling — Variance decay was smooth, not a step function
+4. Fresh interaction — 30-second TTL eliminates token brokers
+5. Tamper-evident — HMAC-SHA256 over all fraud-relevant fields
+
+HMAC signs: `v|n|iat|exp|idle.chain|idle.dMs|hw.ent|evt.t|evt.ts`
+
+Advisory fields (thermal label, cooling monotonicity) are in the token body for risk scoring but deliberately excluded from the HMAC — changing them can't gain access credit without breaking the signature.
+
+---
+
+## Authenticity Audit — The $44 Billion Question
+
+Elon paid $44 billion arguing about what percentage of Twitter's users were real humans. Nobody had a physics-layer tool to measure it. This is that tool.
+
+```js
+import { authenticityAudit } from '@svrnsec/pulse/audit';
+
+const report = authenticityAudit(tokenCohort, { confidenceLevel: 0.95 });
+```
+
+```js
+{
+  cohortSize:          10000,
+  estimatedHumanPct:   73.4,
+  confidenceInterval:  [69.1, 77.8],   // 95% bootstrap CI
+  grade:               'HIGH_FRAUD',
+  botClusterCount:     5,
+  botClusters: [
+    {
+      id:          'farm_a3f20c81',
+      size:         847,
+      sybilScore:   94,
+      signature: {
+        enfRegion:    'americas',
+        dramVerdict:  'dram',
+        thermalLabel: 'sustained_hot',
+        meanEnfDev:   0.0231,          // Hz — localizes to substation/building
+        meanIdleMs:   57200,           // script sleeps for exactly 57s
+      },
+      topSignals: ['timestamp_rhythm', 'thermal_diversity'],
+    },
+  ],
+  recommendation: 'CRITICAL: 5 bot farm clusters account for a majority of traffic...',
+}
+```
+
+**Method:** Tokens are clustered by hardware signature (ENF deviation bucket × DRAM verdict × thermal label × 10-minute time bucket). Organic users scatter across all dimensions. A farm in one building, running the same script, on the same hardware generation collapses into one tight cluster. Each cluster is scored with Population Entropy. A non-parametric bootstrap produces the confidence interval.
+
+**Typical values:**
+
+| Scenario | estimatedHumanPct |
+|---|---|
+| Organic product feed | 92–97% |
+| Incentivised engagement campaign | 55–75% |
+| Coordinated click farm attack | 8–35% |
+
+---
+
 ## Tests
 
 ```bash
@@ -462,53 +638,19 @@ npm test
 ```
 
 ```
-  computeStats               ✓ basic statistics are correct
-                             ✓ constant array has zero CV
-  computeHurst               ✓ returns value in [0,1]
-                             ✓ constant series returns ~0.5 (fallback)
-  detectQuantizationEntropy  ✓ real hardware samples have high entropy
-                             ✓ quantized (VM) samples have low entropy
-  detectThermalSignature     ✓ detects rising pattern
-                             ✓ detects flat pattern
-  classifyJitter             ✓ real hardware scores higher than VM
-                             ✓ score is in [0,1]
-                             ✓ VM samples are flagged
-                             ✓ insufficient data returns zero score with flag
-  runHeuristicEngine         ✓ EJR < 1.02 triggers penalty
-                             ✓ EJR ≥ 1.08 triggers bonus
-                             ✓ Hurst-autocorr incoherence penalised
-                             ✓ picket fence detector triggers on periodic AC
-                             ✓ skewness-kurtosis bonus on right-skewed leptokurtic
-                             ✓ clean metrics produce no flags
-  detectProvider             ✓ KVM profile matched from autocorr signature
-                             ✓ physical profile matched from analog-fog metrics
-                             ✓ scheduler quantum estimated from lag-25 AC
-                             ✓ Nitro identified from near-flat AC profile
-                             ✓ alternatives list populated
-  buildCommitment            ✓ produces deterministic hash
-                             ✓ any field change breaks the hash
-  canonicalJson              ✓ sorts keys deterministically
-  validateProof              ✓ valid proof passes
-                             ✓ tampered payload is rejected
-                             ✓ low jitter score is rejected
-                             ✓ software renderer is blocked
-                             ✓ expired proof is rejected
-                             ✓ nonce check is called
-                             ✓ rejected nonce fails proof
-  generateNonce              ✓ produces 64-char hex strings
-                             ✓ each call is unique
-  serializeSignature         ✓ produces deterministic sig_ ID
-                             ✓ buckets continuous metrics for privacy
-                             ✓ isSynthetic flag preserved
-  matchRegistry              ✓ exact match returns similarity 1.0
-                             ✓ different class returns low similarity
-                             ✓ alternatives sorted by similarity
-  compareSignatures          ✓ same class returns sameClass=true
-                             ✓ physical vs VM returns sameClass=false
+  integration.test.js    43 tests  — core engine, provider classifier, commitment, registry
+  stress.test.js         92 tests  — adversarial: KVM, VMware, Docker, LLM agents,
+                                     Gaussian noise injection, synthetic thermal drift,
+                                     score separation (real min vs VM max)
+  engagement.test.js     45 tests  — IdleAttestation state machine, thermal classification,
+                                     Population Entropy (all 5 tests), Engagement Token
+                                     creation/verification/replay/tamper, risk signals
+  audit.test.js          18 tests  — Authenticity Audit: organic vs farm cohorts, CI
+                                     properties, multi-farm fingerprinting, grade thresholds
 
-  Test Suites: 1 passed
-  Tests:       43 passed, 0 failed
-  Time:        0.327s
+  Test Suites: 4 passed
+  Tests:       158 passed, 0 failed
+  Time:        ~1.0s
 ```
 
 ---
@@ -536,30 +678,46 @@ sovereign-pulse/
 │   │   ├── entropy.js              WASM bridge + phased/adaptive routing
 │   │   ├── adaptive.js             Adaptive early-exit engine
 │   │   ├── bio.js                  Mouse/keyboard interference coefficient
-│   │   └── canvas.js              WebGL/2D canvas fingerprint
+│   │   ├── canvas.js               WebGL/2D canvas fingerprint
+│   │   ├── gpu.js                  WebGPU thermal growth probe
+│   │   ├── dram.js                 DRAM refresh cycle detector
+│   │   ├── enf.js                  Electrical Network Frequency probe
+│   │   ├── sabTimer.js             Sub-millisecond SAB timer
+│   │   └── idleAttestation.js      Proof-of-Idle — thermal hash chain (v0.5.0)
 │   ├── analysis/
-│   │   ├── jitter.js              Statistical classifier (6 components)
-│   │   ├── heuristic.js           Cross-metric physics coherence engine
-│   │   ├── provider.js            Hypervisor/cloud provider classifier
-│   │   └── audio.js               AudioContext callback jitter
+│   │   ├── jitter.js               Statistical classifier (6 components)
+│   │   ├── heuristic.js            Cross-metric physics coherence engine
+│   │   ├── provider.js             Hypervisor/cloud provider classifier
+│   │   ├── audio.js                AudioContext callback jitter
+│   │   ├── llm.js                  LLM agent behavioural detector
+│   │   ├── trustScore.js           Unified 0–100 TrustScore engine (v0.4.0)
+│   │   ├── populationEntropy.js    Sybil detection — 5 cohort-level tests (v0.5.0)
+│   │   └── authenticityAudit.js    $44B question — humanPct + CI (v0.6.0)
 │   ├── middleware/
-│   │   ├── express.js             Express/Fastify/Hono drop-in
-│   │   └── next.js                Next.js App Router HOC
+│   │   ├── express.js              Express/Fastify/Hono drop-in
+│   │   └── next.js                 Next.js App Router HOC
 │   ├── integrations/
-│   │   └── react.js               usePulse() hook
+│   │   ├── react.js                usePulse() hook
+│   │   └── react-native.js         Expo accelerometer + thermal bridge
 │   ├── proof/
-│   │   ├── fingerprint.js         BLAKE3 commitment builder
-│   │   └── validator.js           Server-side proof verifier
+│   │   ├── fingerprint.js          BLAKE3 commitment builder
+│   │   ├── validator.js            Server-side proof verifier
+│   │   ├── challenge.js            HMAC challenge/response
+│   │   └── engagementToken.js      30s physics-backed engagement token (v0.5.0)
 │   └── registry/
-│       └── serializer.js          Provider signature serializer + matcher
-├── crates/pulse-core/             Rust/WASM entropy probe
-├── index.d.ts                     Full TypeScript declarations
+│       └── serializer.js           Provider signature serializer + matcher
+├── crates/pulse-core/              Rust/WASM entropy probe
+├── index.d.ts                      Full TypeScript declarations
 ├── demo/
-│   ├── web/index.html             Standalone browser demo
-│   ├── node-demo.js               CLI demo (no WASM required)
-│   ├── benchmark.js               Generates numbers in this README
-│   └── perf.js                    Pipeline overhead benchmarks
-└── test/integration.test.js       43 tests
+│   ├── web/index.html              Standalone browser demo
+│   ├── node-demo.js                CLI demo (no WASM required)
+│   ├── benchmark.js                Generates numbers in this README
+│   └── perf.js                     Pipeline overhead benchmarks
+└── test/
+    ├── integration.test.js         43 tests  — core engine
+    ├── stress.test.js              92 tests  — adversarial attack suite
+    ├── engagement.test.js          45 tests  — idle / population / tokens
+    └── audit.test.js               18 tests  — authenticity audit
 ```
 
 ---
