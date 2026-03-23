@@ -119,6 +119,31 @@ export function computeTrustScore(payload, extended = {}) {
     bonuses.push({ signal: 'gpu+dram', reason: 'GPU thermal + DRAM refresh both confirmed', pts: 3 });
   }
 
+  // ── 6. Idle attestation (bonus/penalty from engagement token) ─────────────
+  // The idle proof is optional — only present when createEngagementToken() is used.
+  // Genuine thermal cooling proves the device was not running continuous load.
+  const idleProof = extended.idle ?? payload?.signals?.idle ?? null;
+  if (idleProof) {
+    const { thermalTransition, coolingMonotonicity, samples } = idleProof;
+
+    if (thermalTransition === 'hot_to_cold' || thermalTransition === 'cold') {
+      bonuses.push({ signal: 'idle', reason: 'Genuine thermal cooling confirmed between interactions', pts: 5 });
+      if (coolingMonotonicity >= 0.8 && samples >= 3) {
+        bonuses.push({ signal: 'idle', reason: 'Smooth exponential cooling curve — consistent with Newton cooling', pts: 3 });
+      }
+    } else if (thermalTransition === 'cooling') {
+      bonuses.push({ signal: 'idle', reason: 'Mild thermal decay during idle period', pts: 2 });
+    } else if (thermalTransition === 'step_function') {
+      // Abrupt variance drop: characteristic of script pause, not natural idle
+      hardCap = Math.min(hardCap, 65);
+      penalties.push({ signal: 'idle', reason: 'Step-function thermal transition (click farm script pause pattern)', cap: 65 });
+    } else if (thermalTransition === 'sustained_hot') {
+      // No cooling at all: device was under constant load throughout "idle"
+      hardCap = Math.min(hardCap, 60);
+      penalties.push({ signal: 'idle', reason: 'No thermal decay during idle — sustained load pattern', cap: 60 });
+    }
+  }
+
   // ── Raw score ─────────────────────────────────────────────────────────────
   const bonusPts = bonuses.reduce((s, b) => s + b.pts, 0);
   const raw = Math.min(100,

@@ -1,7 +1,7 @@
 {
   "name": "@svrnsec/pulse",
-  "version": "0.4.0",
-  "description": "Physical Turing Test — Hardware-Biological Symmetry Protocol distinguishing real consumer devices from sanitised datacenter VMs.",
+  "version": "0.5.0",
+  "description": "Physical Turing Test — Idle attestation, population-level Sybil detection, and engagement tokens that defeat click farms at the physics layer.",
   "type": "module",
   "license": "MIT",
   "author": "Aaron Miller",
@@ -71,6 +71,18 @@
     },
     "./enf": {
       "import": "./src/collector/enf.js"
+    },
+    "./idle": {
+      "import": "./src/collector/idleAttestation.js",
+      "node":   "./src/collector/idleAttestation.js"
+    },
+    "./population": {
+      "import": "./src/analysis/populationEntropy.js",
+      "node":   "./src/analysis/populationEntropy.js"
+    },
+    "./engage": {
+      "import": "./src/proof/engagementToken.js",
+      "node":   "./src/proof/engagementToken.js"
     }
   },
   "main":   "dist/pulse.cjs.js",
@@ -132,7 +144,13 @@
     "react-native",
     "mobile-security",
     "enf-detection",
-    "cli"
+    "cli",
+    "click-farm-detection",
+    "idle-attestation",
+    "engagement-token",
+    "sybil-detection",
+    "invalid-traffic",
+    "proof-of-idle"
   ],
   "engines": {
     "node": ">=18.0.0"
