@@ -1,0 +1,37 @@
+version: '3.9'
+
+services:
+  pulse-api:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      REDIS_URL: redis://redis:6379
+      NONCE_TTL: 300
+      CORS_ORIGINS: "*"
+      # Override in production — load from secrets manager
+      PULSE_API_KEYS: '[{"key":"sk_live_demo123","name":"Demo App","tier":"starter","rateLimit":60}]'
+      WEBHOOK_SECRET: change-me-in-production
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  redis_data:

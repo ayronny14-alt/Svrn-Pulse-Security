@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sovereign Pulse — Physical Turing Test</title>
+<style>
+/* === Reset & Base === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0a0b0d;
+  --surface:   #111318;
+  --surface2:  #181c24;
+  --border:    #1e2433;
+  --text:      #e2e8f0;
+  --muted:     #64748b;
+  --accent:    #3b82f6;
+  --accent-glow: rgba(59, 130, 246, 0.15);
+  --green:     #22c55e;
+  --green-dim: rgba(34, 197, 94, 0.12);
+  --red:       #ef4444;
+  --red-dim:   rgba(239, 68, 68, 0.12);
+  --yellow:    #f59e0b;
+  --font:      'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 16px 80px;
+}
+
+/* === Layout === */
+.container { width: 100%; max-width: 780px; }
+
+/* === Header === */
+.header { text-align: center; margin-bottom: 48px; }
+.header h1 {
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: #fff;
+}
+.header p {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: var(--accent-glow);
+  border: 1px solid rgba(59,130,246,0.3);
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+/* === Card === */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+
+/* === Run Button === */
+.run-btn {
+  display: block;
+  width: 100%;
+  padding: 14px 24px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.run-btn:hover  { opacity: 0.88; }
+.run-btn:active { transform: scale(0.99); }
+.run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* === Progress === */
+.progress-area { display: none; }
+.progress-area.visible { display: block; }
+
+.stage-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+.stage-label span { color: var(--accent); }
+
+.progress-track {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #818cf8);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+/* === Signal Meters === */
+.meters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.meter { }
+.meter-label {
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+}
+.meter-label em { color: var(--text); font-style: normal; }
+.meter-track {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+  width: 0%;
+}
+.meter-fill.vm { background: linear-gradient(90deg, var(--red), #f97316); }
+.meter-fill.hw { background: linear-gradient(90deg, var(--green), #14b8a6); }
+
+.verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+.verdict-badge.vm       { background: var(--red-dim);   border-color: var(--red);   color: var(--red);   }
+.verdict-badge.physical { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+.verdict-badge.uncertain{ background: #1e2433; border-color: var(--muted); color: var(--muted); }
+
+/* === Result Card === */
+.result-area { display: none; }
+.result-area.visible { display: block; }
+
+.verdict-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.verdict-icon {
+  font-size: 40px;
+  line-height: 1;
+}
+.verdict-text h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+.verdict-text p {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* Score gauge */
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.score-num {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  min-width: 120px;
+}
+.score-track {
+  flex: 1;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.score-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.score-fill.high   { background: linear-gradient(90deg, #22c55e, #86efac); }
+.score-fill.medium { background: linear-gradient(90deg, #f59e0b, #fcd34d); }
+.score-fill.low    { background: linear-gradient(90deg, var(--red), #f97316); }
+
+/* Metrics table */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--surface2);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.metric-row .k { color: var(--muted); }
+.metric-row .v { color: var(--text); font-weight: 600; }
+
+/* Provider badge */
+.provider-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  margin-bottom: 20px;
+}
+.provider-badge .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.provider-badge.synthetic .dot { background: var(--red); }
+.provider-badge.physical  .dot { background: var(--green); }
+
+/* Flags */
+.flags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.flag {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+.flag.warn { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+
+/* Histogram */
+.histogram {
+  margin-top: 20px;
+}
+.histogram-title {
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.hist-bars { display: flex; align-items: flex-end; gap: 2px; height: 60px; }
+.hist-bar {
+  flex: 1;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  opacity: 0.7;
+  transition: height 0.4s ease;
+  min-height: 2px;
+}
+
+/* Action row */
+.action-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+.action-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.action-btn:hover { background: var(--border); }
+.action-btn.primary {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+/* === How it works === */
+.how-section { margin-top: 32px; }
+.how-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.how-item {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.how-item .how-icon { font-size: 20px; margin-bottom: 8px; }
+.how-item h4 { font-size: 12px; color: #fff; margin-bottom: 4px; }
+.how-item p  { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+/* === Error === */
+.error-box {
+  padding: 14px;
+  border-radius: 8px;
+  background: var(--red-dim);
+  border: 1px solid rgba(239,68,68,0.3);
+  color: #fca5a5;
+  font-size: 12px;
+  display: none;
+}
+.error-box.visible { display: block; }
+
+/* === Animations === */
+@keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.pulse-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="pill">Physical Turing Test</div>
+    <h1>Is this a real device?</h1>
+    <p>
+      Runs a Rust/WASM entropy probe measuring thermal noise, DRAM refresh jitter,<br>
+      and hypervisor clock artifacts — physics that VMs cannot fake.
+    </p>
+  </div>
+
+  <!-- Run card -->
+  <div class="card" id="run-card">
+    <div class="card-title">Hardware Probe</div>
+    <button class="run-btn" id="run-btn" onclick="runProbe()">
+      Run Physical Test
+    </button>
+
+    <!-- Progress -->
+    <div class="progress-area" id="progress-area" style="margin-top:20px">
+      <div class="stage-label">
+        <span id="stage-text">Initialising...</span>
+        <span id="pct-text">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+
+      <div class="meters">
+        <div class="meter">
+          <div class="meter-label">
+            VM Confidence <em id="vm-val">0.00</em>
+          </div>
+          <div class="meter-track">
+            <div class="meter-fill vm" id="vm-meter"></div>
+          </div>
+        </div>
+        <div class="meter">
+          <div class="meter-label">
+            HW Confidence <em id="hw-val">0.00</em>
+          </div>
+          <div class="meter-track">
+            <div class="meter-fill hw" id="hw-meter"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="verdict-live"></div>
+    </div>
+
+    <!-- Error -->
+    <div class="error-box" id="error-box" style="margin-top:16px"></div>
+  </div>
+
+  <!-- Result -->
+  <div class="result-area card" id="result-area">
+    <div class="verdict-main">
+      <div class="verdict-icon" id="verdict-icon">—</div>
+      <div class="verdict-text">
+        <h2 id="verdict-title">—</h2>
+        <p id="verdict-sub">—</p>
+      </div>
+    </div>
+
+    <div class="score-row">
+      <div class="score-num" id="score-num">—</div>
+      <div style="flex:1">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:6px;">
+          SCORE <span id="score-label" style="color:var(--text)"></span>
+        </div>
+        <div class="score-track">
+          <div class="score-fill" id="score-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="provider-badge" id="provider-badge">
+      <div class="dot"></div>
+      <span id="provider-label">—</span>
+    </div>
+
+    <div class="metrics-grid" id="metrics-grid"></div>
+
+    <div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:8px;letter-spacing:.5px;text-transform:uppercase">
+        Diagnostic Flags
+      </div>
+      <div class="flags-list" id="flags-list"></div>
+    </div>
+
+    <div class="histogram" id="histogram-section">
+      <div class="histogram-title">Timing Distribution</div>
+      <div class="hist-bars" id="hist-bars"></div>
+    </div>
+
+    <div class="action-row">
+      <button class="action-btn" onclick="copyResult()">Copy JSON</button>
+      <button class="action-btn primary" onclick="resetProbe()">Run Again</button>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div class="how-section">
+    <div class="card-title" style="margin-bottom:12px">How it works</div>
+    <div class="how-grid">
+      <div class="how-item">
+        <div class="how-icon">⚙️</div>
+        <h4>WASM Entropy Probe</h4>
+        <p>Branch-heavy matrix multiply. Measures wall-clock timing noise from thermal throttle, DRAM refresh, and OS interrupts.</p>
+      </div>
+      <div class="how-item">
+        <div class="how-icon">📈</div>
+        <h4>Adaptive Early Exit</h4>
+        <p>Checks signal confidence every 25 iterations. Obvious VMs stop at 50 iters (~0.9s). Real hardware runs longer for certainty.</p>
+      </div>
+      <div class="how-item">
+        <div class="how-icon">🔬</div>
+        <h4>Cross-Metric Heuristics</h4>
+        <p>6 physically-linked relationships verified simultaneously. Spoofing one metric causes contradictions in the others.</p>
+      </div>
+      <div class="how-item">
+        <div class="how-icon">🔒</div>
+        <h4>BLAKE3 Commitment</h4>
+        <p>Only ~1.6KB of statistical summaries leave the browser. Raw timings, pixels, and coordinates never transmitted.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+// ── Simulated probe (runs without WASM binary) ─────────────────────────────
+// Demonstrates the full UI flow using synthetic data matching real metrics.
+
+const STAGE_LABELS = {
+  start:         'Initialising probe...',
+  entropy_batch: 'Collecting entropy...',
+  entropy_done:  'Entropy probe complete',
+  canvas_done:   'Canvas fingerprint captured',
+  audio_done:    'Audio jitter measured',
+  bio_done:      'Bio signals captured',
+  analysis_done: 'Running heuristic engine...',
+  complete:      'Complete',
+};
+
+let _lastProofJson = null;
+let _isRunning = false;
+
+// ── DOM refs ──────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function showProgress() {
+  $('progress-area').classList.add('visible');
+  $('result-area').classList.remove('visible');
+  $('error-box').classList.remove('visible');
+}
+
+function setStage(stage, pct = 0) {
+  $('stage-text').textContent = STAGE_LABELS[stage] ?? stage;
+  $('pct-text').textContent   = `${Math.round(pct)}%`;
+  $('progress-fill').style.width = `${pct}%`;
+}
+
+function setMeters(vmConf, hwConf, earlyVerdict) {
+  $('vm-meter').style.width = `${Math.round(vmConf * 100)}%`;
+  $('hw-meter').style.width = `${Math.round(hwConf * 100)}%`;
+  $('vm-val').textContent   = vmConf.toFixed(2);
+  $('hw-val').textContent   = hwConf.toFixed(2);
+
+  const badge = $('verdict-live');
+  if (earlyVerdict && earlyVerdict !== 'uncertain') {
+    badge.innerHTML = `<div class="verdict-badge ${earlyVerdict}" style="margin-top:8px">
+      <span>${earlyVerdict === 'vm' ? '⚠' : '✓'}</span>
+      <span>Early verdict: ${earlyVerdict === 'vm' ? 'Synthetic environment' : 'Physical hardware'}</span>
+    </div>`;
+  }
+}
+
+function buildHistogram(timings) {
+  if (!timings?.length) return;
+  const min = Math.min(...timings);
+  const max = Math.max(...timings);
+  const bins = 20;
+  const w    = (max - min) / bins || 1;
+  const counts = new Array(bins).fill(0);
+  for (const t of timings) {
+    const i = Math.min(bins - 1, Math.floor((t - min) / w));
+    counts[i]++;
+  }
+  const maxCount = Math.max(...counts);
+  const container = $('hist-bars');
+  container.innerHTML = '';
+  for (const c of counts) {
+    const bar = document.createElement('div');
+    bar.className = 'hist-bar';
+    bar.style.height = maxCount > 0 ? `${Math.round((c / maxCount) * 100)}%` : '2px';
+    bar.title = `${c} samples`;
+    container.appendChild(bar);
+  }
+}
+
+function showResult(data) {
+  const area = $('result-area');
+  area.classList.add('visible');
+
+  const score = data.score ?? 0;
+  const isSynthetic = data.isSynthetic ?? (score < 0.55);
+
+  $('verdict-icon').textContent  = isSynthetic ? '🚩' : '✅';
+  $('verdict-title').textContent = isSynthetic ? 'Synthetic Environment Detected' : 'Physical Hardware Confirmed';
+  $('verdict-sub').textContent   = data.providerLabel ?? (isSynthetic ? 'VM or AI endpoint' : 'Real consumer device');
+
+  const pct = Math.round(score * 100);
+  $('score-num').textContent     = `${pct}%`;
+  const tier = score >= 0.75 ? 'high' : score >= 0.55 ? 'medium' : 'low';
+  const tierLabels = { high: 'HIGH CONFIDENCE', medium: 'MEDIUM', low: 'LOW / SUSPICIOUS' };
+  $('score-label').textContent   = tierLabels[tier];
+  const fill = $('score-fill');
+  fill.className = `score-fill ${tier}`;
+  fill.style.width = `${pct}%`;
+
+  const pb = $('provider-badge');
+  pb.className = `provider-badge ${isSynthetic ? 'synthetic' : 'physical'}`;
+  $('provider-label').textContent = data.providerLabel ?? (isSynthetic ? 'Generic VM' : 'Physical Hardware');
+
+  // Metrics
+  const metrics = data.metrics ?? {};
+  const rows = [
+    ['CV',                  metrics.cv?.toFixed(4) ?? '—'],
+    ['Hurst Exponent',      metrics.hurstExponent?.toFixed(4) ?? '—'],
+    ['Quantization Entropy',metrics.quantizationEntropy?.toFixed(4) ?? '—'],
+    ['Autocorr lag-1',      metrics.autocorrLag1?.toFixed(4) ?? '—'],
+    ['Autocorr lag-50',     metrics.autocorrLag50?.toFixed(4) ?? '—'],
+    ['Entropy-Jitter Ratio',metrics.entropyJitterRatio?.toFixed(4) ?? '—'],
+    ['Thermal Pattern',     metrics.thermalPattern ?? '—'],
+    ['Scheduler Quantum',   metrics.schedulerQuantumMs != null ? `${metrics.schedulerQuantumMs}ms` : 'none'],
+    ['Hardware ID',         metrics.hardwareId?.slice(0,12) + '...' ?? '—'],
+  ];
+  $('metrics-grid').innerHTML = rows.map(([k, v]) =>
+    `<div class="metric-row"><span class="k">${k}</span><span class="v">${v}</span></div>`
+  ).join('');
+
+  // Flags
+  const flags = data.flags ?? [];
+  $('flags-list').innerHTML = flags.length
+    ? flags.map(f => `<span class="flag warn">${f}</span>`).join('')
+    : `<span class="flag">No flags</span>`;
+
+  // Histogram from timings if available
+  if (data._timings) buildHistogram(data._timings);
+}
+
+// ── Simulate a full probe run (uses math, not real WASM) ──────────────────
+function gauss(mean, sd) {
+  // Box-Muller
+  const u = 1 - Math.random();
+  const v = Math.random();
+  return mean + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function simulateTimings(n, isVM) {
+  if (isVM) {
+    // VM: quantized to 0.1ms grid + periodic steal spikes every ~50 iters
+    return Array.from({ length: n }, (_, i) => {
+      const base   = Math.round((5.0 + Math.random() * 0.05) * 10) / 10;
+      const steal  = (i % 50 === 0) ? gauss(1.8, 0.15) : 0;
+      return base + steal;
+    });
+  } else {
+    // Real hardware: Gaussian spread with sawtooth thermal and occasional OS spike
+    return Array.from({ length: n }, (_, i) => {
+      const thermal = Math.sin(i / 30) * 0.4;
+      const spike   = Math.random() < 0.025 ? gauss(2.5, 0.5) : 0;
+      return Math.max(0.5, gauss(4.9 + thermal, 0.45) + spike);
+    });
+  }
+}
+
+async function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+window.runProbe = async function runProbe() {
+  if (_isRunning) return;
+  _isRunning = true;
+
+  const btn = $('run-btn');
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+
+  showProgress();
+
+  // Decide: 30% chance of VM in demo
+  const isVM = Math.random() < 0.30;
+  const iterations = 200;
+
+  try {
+    setStage('start', 2);
+    await sleep(300);
+
+    // Simulate batch-by-batch adaptive probe
+    const batchSize = 25;
+    let allTimings = [];
+    let stopped = false;
+
+    for (let iter = 0; iter < iterations && !stopped; iter += batchSize) {
+      const n     = Math.min(batchSize, iterations - iter);
+      const chunk = simulateTimings(n, isVM);
+      allTimings.push(...chunk);
+
+      const pct       = Math.round(allTimings.length / iterations * 100);
+      const vmConf    = isVM ? Math.min(0.95, 0.25 + (iter / iterations) * 0.75 + Math.random() * 0.05) : Math.max(0.02, 0.15 - (iter / iterations) * 0.12);
+      const hwConf    = isVM ? Math.max(0.02, 0.10 - (iter / iterations) * 0.08) : Math.min(0.92, 0.20 + (iter / iterations) * 0.72 + Math.random() * 0.05);
+      const verdict   = vmConf > 0.6 ? 'vm' : hwConf > 0.6 ? 'physical' : 'uncertain';
+
+      setStage('entropy_batch', pct);
+      setMeters(vmConf, hwConf, verdict);
+
+      // Adaptive early exit
+      if (allTimings.length >= 50 && vmConf >= 0.85) { stopped = true; }
+      if (allTimings.length >= 75 && hwConf >= 0.80) { stopped = true; }
+
+      await sleep(isVM ? 80 : 150);
+    }
+
+    setStage('entropy_done', 65); await sleep(200);
+    setStage('canvas_done',  78); await sleep(150);
+    setStage('audio_done',   85); await sleep(100);
+    setStage('bio_done',     92); await sleep(200);
+    setStage('analysis_done',97); await sleep(300);
+    setStage('complete',    100);
+
+    // Build fake result
+    const score   = isVM
+      ? 0.38 + Math.random() * 0.12
+      : 0.72 + Math.random() * 0.20;
+
+    const cv      = isVM ? 0.06 + Math.random() * 0.03 : 0.12 + Math.random() * 0.04;
+    const hurst   = isVM ? 0.03 + Math.random() * 0.04 : 0.50 + Math.random() * 0.10;
+    const qe      = isVM ? 1.1  + Math.random() * 0.4  : 3.2  + Math.random() * 0.6;
+    const lag1    = isVM ? 0.55 + Math.random() * 0.15 : 0.05 + Math.random() * 0.08;
+    const ejr     = isVM ? 0.98 + Math.random() * 0.04 : 1.12 + Math.random() * 0.18;
+
+    const flags = isVM ? [
+      'HIGH_AUTOCORR_VM_SCHEDULER_DETECTED',
+      'LOW_QUANTIZATION_ENTROPY_SYNTHETIC_TIMER',
+      'VERY_LOW_HURST_ANTIPERSISTENT',
+      ejr < 1.02 ? 'ENTROPY_JITTER_RATIO_FLAT' : null,
+    ].filter(Boolean) : [];
+
+    const result = {
+      score,
+      isSynthetic:   score < 0.55,
+      providerLabel: isVM
+        ? ['DigitalOcean Droplet (KVM)', 'AWS EC2 t3.micro (Xen)', 'VMware ESXi vSphere', 'GCP e2-medium (KVM)'][Math.floor(Math.random()*4)]
+        : 'Physical Hardware',
+      flags,
+      metrics: {
+        cv: cv, hurstExponent: hurst,
+        quantizationEntropy: qe,
+        autocorrLag1: lag1,
+        autocorrLag50: isVM ? 0.48 + Math.random() * 0.2 : 0.02 + Math.random() * 0.05,
+        entropyJitterRatio: ejr,
+        thermalPattern: isVM ? 'sawtooth (synthetic)' : 'sawtooth',
+        schedulerQuantumMs: isVM ? [5, 10, 15, 20][Math.floor(Math.random()*4)] : null,
+        hardwareId: Array.from({length:16}, () => '0123456789abcdef'[Math.floor(Math.random()*16)]).join(''),
+      },
+      _timings: allTimings,
+    };
+
+    _lastProofJson = JSON.stringify(result, null, 2);
+    showResult(result);
+
+  } catch (err) {
+    const eb = $('error-box');
+    eb.textContent = `Error: ${err.message}`;
+    eb.classList.add('visible');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run Physical Test';
+    _isRunning = false;
+  }
+};
+
+window.resetProbe = function() {
+  $('result-area').classList.remove('visible');
+  $('progress-area').classList.remove('visible');
+  $('error-box').classList.remove('visible');
+  $('verdict-live').innerHTML = '';
+  _lastProofJson = null;
+};
+
+window.copyResult = async function() {
+  if (!_lastProofJson) return;
+  try {
+    await navigator.clipboard.writeText(_lastProofJson);
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy JSON'; }, 1500);
+  } catch {
+    prompt('Copy this:', _lastProofJson);
+  }
+};
+</script>
+</body>
+</html>
