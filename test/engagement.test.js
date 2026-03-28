@@ -42,7 +42,7 @@ function makeLcg(seed) {
   };
 }
 
-const SECRET = 'test-secret-at-least-16-chars';
+const SECRET = 'test-secret-at-least-32-characters-long!';
 
 // ── Synthetic idle proofs ──────────────────────────────────────────────────────
 
@@ -586,7 +586,7 @@ describe('EngagementToken — verification', () => {
       interaction: { type: 'click', ts: Date.now() },
       secret:      SECRET,
     });
-    const result = await verifyEngagementToken(created.compact, 'wrong-secret-with-enough-length');
+    const result = await verifyEngagementToken(created.compact, 'wrong-secret-with-enough-length-32chars!');
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('invalid_signature');
   });
@@ -767,7 +767,10 @@ describe('EngagementToken — encode / decode round-trip', () => {
     const original = { v: 2, n: 'a'.repeat(64), iat: 1000, exp: 31000, sig: 'b'.repeat(64) };
     const encoded  = encodeToken(original);
     const decoded  = decodeToken(encoded);
-    expect(decoded).toEqual(original);
+    // decodeToken (deprecated) now adds _verified: false via decodeTokenUnsafe
+    const { _verified, ...rest } = decoded;
+    expect(rest).toEqual(original);
+    expect(_verified).toBe(false);
   });
 
 });
