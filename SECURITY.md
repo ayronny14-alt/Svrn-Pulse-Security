@@ -9,8 +9,8 @@ We take vulnerabilities seriously and will respond promptly.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | ✅ Current release |
-| < 0.1   | ❌ No longer supported |
+| 0.8.x   | :white_check_mark: Security fixes + active development |
+| < 0.8   | :x: Deprecated — critical security vulnerabilities. Upgrade immediately. |
 
 ## Threat Model
 
@@ -18,12 +18,18 @@ We take vulnerabilities seriously and will respond promptly.
 - Automated bots running in cloud VMs / Docker containers with no real hardware
 - Headless browser automation (Puppeteer, Playwright) on virtual machines
 - Credential-stuffing and account-takeover attacks from datacenter IP ranges
+- Click farms (via proof-of-idle thermal cooling analysis)
+- LLM-controlled browser agents (via behavioral biometrics)
+- Coordinated inauthentic behavior (via population-level statistical analysis)
+- Proof replay attacks (via HMAC-signed challenges + atomic nonce consumption)
+- Payload tampering (via BLAKE3 commitment integrity)
 
 **What pulse does NOT claim to protect against:**
 - A determined human attacker on real consumer hardware
-- A physical device farm (phones/laptops in a room)
+- A physical device farm where each device genuinely cools between interactions
 - Kernel-level hooks that spoof `performance.now()` at nanosecond precision
 - Server-side replay attacks when `checkNonce` is not wired (always wire it)
+- GPU passthrough VMs with native hardware clock access
 
 ## Reporting a Vulnerability
 
@@ -55,32 +61,31 @@ You will receive credit in the changelog unless you prefer to remain anonymous.
 ## Cryptographic Primitives
 
 - **Hashing**: BLAKE3 via `@noble/hashes` — audited, constant-time implementation
+- **Challenge signing**: HMAC-SHA256 over `nonce|issuedAt|expiresAt` with timing-safe comparison
+- **Engagement tokens**: HMAC-SHA256 over fraud-relevant fields with 30-second TTL
 - **Nonce generation**: `crypto.getRandomValues()` / Node.js `webcrypto` — 256 bits of entropy
 - **Webhook signatures**: HMAC-SHA256 — standard authenticated integrity check
+- **API key comparison**: `crypto.timingSafeEqual` — constant-time to prevent timing attacks
 
-## Known Limitations & Design Decisions
+## Privacy
 
-### Score, not binary gate
-The jitter score is a continuous value `[0, 1]`.  Applications must choose their own
-threshold (`minJitterScore`).  A score of `0.55` (default) is conservative; financial
-applications may want `0.70+`.
-
-### No raw data leaves the browser
-The server receives only a ~1.6 KB statistical summary (means, variances, percentiles).
-Raw timing arrays and mouse coordinates stay on device.  This is intentional — it
-limits what a compromised server can learn about the client.
-
-### Registry is additive
-The VM classification registry (which vendor a VM is from) is separate from detection.
-A VM can be detected by physics even if its vendor is not in the registry.
+- Raw timing arrays never leave the device — server receives only a ~1.6 KB statistical summary
+- Mouse coordinates are never stored — only timing deltas between events
+- Keystrokes capture only dwell/flight times — key labels are discarded immediately
+- `hardwareId()` is a 128-bit BLAKE3 hash — stable per device, not reversible, not cross-origin linkable
+- No IP addresses are logged by default — integrators should implement their own IP handling policy
 
 ## Secure Deployment Checklist
 
-- [ ] Set `NODE_ENV=production` to disable verbose error messages
-- [ ] Wire `checkNonce` to a Redis `SET NX` with TTL to prevent replay attacks
-- [ ] Set `PULSE_WEBHOOK_SECRET` to a cryptographically random 32+ character string
+- [ ] Set `NODE_ENV=production` to enforce secret validation at startup
+- [ ] Set `PULSE_CHALLENGE_SECRET` to a cryptographically random 64-char hex string
+- [ ] Set `WEBHOOK_SECRET` to a separate cryptographically random string
+- [ ] Wire `checkNonce` to Redis `DEL` (returns 1 on first use) for atomic replay prevention
+- [ ] Set `REDIS_URL` for multi-instance deployments (in-memory store is single-instance only)
 - [ ] Put the API server behind TLS (nginx / Caddy / ALB)
-- [ ] Set `PULSE_CORS_ORIGINS` to your exact domain — not `*`
-- [ ] Set `minJitterScore` ≥ 0.65 for high-value endpoints
+- [ ] Set `CORS_ORIGINS` to your exact domain — not `*`
+- [ ] Set `minJitterScore` >= 0.65 for high-value endpoints
 - [ ] Monitor `riskFlags` in webhook payloads for anomaly detection
+- [ ] Use `/health/ready` (not `/health`) for load balancer health checks
 - [ ] Rotate `PULSE_API_KEYS` regularly; use different keys per environment
+- [ ] Review `webhook.dead_letter` log events for delivery failures

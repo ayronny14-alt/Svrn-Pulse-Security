@@ -6,4 +6,15 @@ export default {
   moduleNameMapper: {
     '../../pkg/pulse_core.js': '<rootDir>/test/__mocks__/pulse_core.js',
   },
+  collectCoverage:     true,
+  coverageDirectory:   'coverage',
+  coverageReporters:   ['text', 'lcov'],
+  coverageThreshold: {
+    global: {
+      statements: 60,
+      branches:   50,
+      functions:  55,
+      lines:      60,
+    },
+  },
 };

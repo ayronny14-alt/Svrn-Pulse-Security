@@ -317,6 +317,9 @@ export { detectLlmAgent }  from './analysis/llm.js';
 // Terminal utilities — pretty probe results in Node.js server contexts
 export { renderProbeResult, renderError, renderInlineUpdateHint } from './terminal.js';
 
+// Structured error codes
+export { PulseErrorCode } from './errors.js';
+
 // Version introspection
 export { CURRENT_VERSION, checkForUpdate } from './update-notifier.js';
 

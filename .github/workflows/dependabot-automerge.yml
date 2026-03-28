@@ -11,10 +11,18 @@ permissions:
 
 jobs:
   automerge:
-    name: Auto-merge Dependabot PRs
+    name: Auto-merge Dependabot PRs (patch & minor only)
     runs-on: ubuntu-latest
     steps:
-      - name: Auto-merge when checks pass
+      - name: Fetch Dependabot metadata
+        id: dependabot-metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-merge patch and minor updates
+        if: >
+          steps.dependabot-metadata.outputs.update-type != 'version-update:semver-major'
         uses: pascalgn/automerge-action@v0.15.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

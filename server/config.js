@@ -41,7 +41,6 @@ function _validateWebhookUrl(url, keyName) {
   return url;
 }
 
-// Validate each key's webhookUrl at startup
 for (const k of raw) {
   if (k.webhookUrl) {
     _validateWebhookUrl(k.webhookUrl, k.name ?? k.key?.slice(0, 8));
@@ -55,17 +54,28 @@ if (nodeEnv === 'production' && (!webhookSecret || webhookSecret === 'change-me'
   throw new Error('[pulse-api] WEBHOOK_SECRET must be set to a strong random value in production');
 }
 
+// Challenge secret for HMAC-signed nonces (required in production)
+const challengeSecret = process.env.PULSE_CHALLENGE_SECRET ?? null;
+if (nodeEnv === 'production' && (!challengeSecret || challengeSecret.length < 32)) {
+  throw new Error('[pulse-api] PULSE_CHALLENGE_SECRET must be set to a 32+ character random string in production. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+}
+
 const corsOrigins = process.env.CORS_ORIGINS ?? '*';
 if (nodeEnv === 'production' && corsOrigins === '*') {
   console.warn('[pulse-api] WARNING: CORS is set to "*" in production. Consider restricting to specific origins.');
 }
 
+// Maximum outstanding nonces — prevents nonce hoarding attacks
+const maxNonces = parseInt(process.env.MAX_OUTSTANDING_NONCES ?? '10000', 10);
+
 export const config = Object.freeze({
-  port:          parseInt(process.env.PORT ?? '3001', 10),
+  port:            parseInt(process.env.PORT ?? '3001', 10),
   nodeEnv,
-  redisUrl:      process.env.REDIS_URL ?? null,
-  nonceTtl:      parseInt(process.env.NONCE_TTL ?? '300', 10),
-  webhookSecret: webhookSecret ?? 'change-me',
+  redisUrl:        process.env.REDIS_URL ?? null,
+  nonceTtl:        parseInt(process.env.NONCE_TTL ?? '300', 10),
+  webhookSecret:   webhookSecret ?? 'change-me',
+  challengeSecret: challengeSecret ?? 'dev-only-challenge-secret-not-for-production!!',
   corsOrigins,
-  apiKeys:       new Map(raw.map(k => [k.key, k])),
+  maxNonces,
+  apiKeys:         new Map(raw.map(k => [k.key, k])),
 });

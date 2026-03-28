@@ -1,8 +1,9 @@
 // server/index.js
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import cors    from 'cors';
 import { config }             from './config.js';
-import { nonceStore, usageStore } from './stores.js';  // singleton instances
+import { nonceStore, usageStore } from './stores.js';
 import { authMiddleware }    from './middleware/auth.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { challengeRouter }   from './routes/challenge.js';
@@ -10,16 +11,15 @@ import { verifyRouter }      from './routes/verify.js';
 import { statsRouter }       from './routes/stats.js';
 import { healthRouter }      from './routes/health.js';
 
-// Re-export for any code that still needs direct access
 export { nonceStore, usageStore };
 
-// ── Express app ───────────────────────────────────────────────────────────
 const app = express();
 
 app.use(cors({
   origin: config.corsOrigins === '*' ? true : config.corsOrigins.split(',').map(s => s.trim()),
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Api-Key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Api-Key', 'X-Request-ID'],
+  exposedHeaders: ['X-Request-ID'],
 }));
 
 // ── Security headers ───────────────────────────────────────────────────────
@@ -36,6 +36,13 @@ app.use((_req, res, next) => {
 });
 
 app.use(express.json({ limit: '64kb' }));
+
+// ── Request ID propagation ───────────────────────────────────────────────
+app.use((req, res, next) => {
+  req.requestId = req.headers['x-request-id'] ?? randomUUID();
+  res.setHeader('X-Request-ID', req.requestId);
+  next();
+});
 
 // ── Public routes ─────────────────────────────────────────────────────────
 app.use('/health', healthRouter);
@@ -55,26 +62,38 @@ app.use((req, res) => {
 });
 
 // ── Global error handler ─────────────────────────────────────────────────
-app.use((err, _req, res, _next) => {
-  console.error('[pulse-api] unhandled error:', err);
+app.use((err, req, res, _next) => {
+  console.error(JSON.stringify({
+    ts:        Date.now(),
+    event:     'server.error',
+    requestId: req.requestId,
+    error:     err.message,
+    stack:     config.nodeEnv !== 'production' ? err.stack : undefined,
+  }));
   res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Unexpected server error' });
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 const server = app.listen(config.port, () => {
   console.log(JSON.stringify({
-    event:   'server.started',
-    port:    config.port,
-    env:     config.nodeEnv,
+    event:    'server.started',
+    port:     config.port,
+    env:      config.nodeEnv,
     nonceTtl: config.nonceTtl,
+    redis:    !!config.redisUrl,
+    hmacChallenges: true,
   }));
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────────────────
 function shutdown(signal) {
-  console.log(`[pulse-api] ${signal} received — shutting down gracefully`);
-  server.close(() => {
-    console.log('[pulse-api] HTTP server closed');
+  console.log(JSON.stringify({ event: 'server.shutdown', signal }));
+  server.close(async () => {
+    // Clean up Redis connection if active
+    if (typeof nonceStore.quit === 'function') {
+      try { await nonceStore.quit(); } catch {}
+    }
+    console.log(JSON.stringify({ event: 'server.closed' }));
     process.exit(0);
   });
   setTimeout(() => process.exit(0), 10_000);
