@@ -29,14 +29,14 @@ router.post('/', async (req, res) => {
     const validateProof = await getValidator();
 
     // Security: options come from the request body (potentially client-controlled).
-    // - minJitterScore: enforce a hard floor of 0.50 so callers can't disable the score gate
+    // - minJitterScore: enforce a hard floor of 0.55 so callers can only tighten, not loosen
     // - blockSoftwareRenderer: always true — never let callers whitelist VM renderers
     // - maxAgeMs: client can tighten (lower) but not loosen beyond 5 min default
     const clientMinScore = typeof options.minJitterScore === 'number' ? options.minJitterScore : 0.55;
     const clientMaxAge   = typeof options.maxAgeMs       === 'number' ? options.maxAgeMs       : 300_000;
 
     const result = await validateProof(payload, hash, {
-      minJitterScore:        Math.max(0.50, clientMinScore),       // floor: never below 0.50
+      minJitterScore:        Math.max(0.55, clientMinScore),       // floor: never below server default
       requireBio:            options.requireBio === true,          // opt-in only; default false
       blockSoftwareRenderer: true,                                 // always enforced server-side
       maxAgeMs:              Math.min(300_000, clientMaxAge),      // ceiling: never above 5 min
@@ -57,7 +57,7 @@ router.post('/', async (req, res) => {
       provider:   payload?.provider?.id ?? 'unknown',
     }));
 
-    // Fire webhook (non-blocking)
+    // Fire webhook (non-blocking, failures logged)
     fireWebhook(req.keyRecord, result.valid ? 'verify.passed' : 'verify.rejected', {
       score:      result.score,
       confidence: result.confidence,

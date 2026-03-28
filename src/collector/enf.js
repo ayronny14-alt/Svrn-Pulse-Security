@@ -129,7 +129,7 @@ export async function collectEnfTimings(opts = {}) {
   const psd     = _computePsd(timings, sampleRateHz);
 
   // Find the dominant frequency peak
-  const peakIdx  = psd.reduce((best, v, i) => v > psd[best] ? i : best, 0);
+  const peakIdx  = psd.powers.reduce((best, v, i) => i > 0 && v > psd.powers[best] ? i : best, 1);
   const peakFreq = psd.freqs[peakIdx];
 
   // Power in 100 Hz window vs 120 Hz window

@@ -214,7 +214,7 @@ export class Fingerprint {
   readonly physicalEvidence: PhysicalEvidence[];
 
   /**
-   * Stable, privacy-safe 16-char hex hardware identifier.
+   * Stable, privacy-safe 32-char hex hardware identifier (128-bit collision resistance).
    * Stable per device, changes if GPU/driver changes, not reversible.
    */
   hardwareId(): string;
@@ -625,7 +625,7 @@ export interface GpuEntropyResult {
   vendorString: string | null;
   dispatchCV: number;
   thermalGrowth: number;
-  verdict: 'real_gpu' | 'software_renderer' | 'no_webgpu' | 'ambiguous';
+  verdict: 'real_gpu' | 'virtual_gpu' | 'software_renderer' | 'no_gpu' | 'no_webgpu' | 'ambiguous';
 }
 
 export declare function collectGpuEntropy(opts?: object): Promise<GpuEntropyResult>;
@@ -844,3 +844,52 @@ export interface UsePulseNativeReturn {
 }
 
 export declare function usePulseNative(opts?: UsePulseNativeOptions): UsePulseNativeReturn;
+
+// =============================================================================
+// Engagement Token
+// =============================================================================
+
+export interface EngagementTokenResult {
+  token:     object;
+  compact:   string;
+  expiresAt: number;
+}
+
+export interface EngagementVerifyResult {
+  valid:         boolean;
+  reason?:       string;
+  expiredByMs?:  number;
+  token?:        object;
+  idleWarnings?: string[];
+  riskSignals?:  Array<{ code: string; severity: 'high' | 'medium' | 'low' }>;
+  issuedAt?:     number;
+  expiresAt?:    number;
+}
+
+export declare function createEngagementToken(opts: {
+  pulseResult:   object;
+  idleProof?:    object | null;
+  interaction?:  { type?: string; ts?: number; motorConsistency?: number };
+  secret:        string;
+  _overrides?:   object;
+}): EngagementTokenResult;
+
+export declare function verifyEngagementToken(
+  tokenOrCompact: string | object,
+  secret: string,
+  opts?: {
+    checkNonce?: (nonce: string) => Promise<boolean>;
+    now?: () => number;
+  }
+): Promise<EngagementVerifyResult>;
+
+export declare function encodeToken(token: object): string;
+
+/** @deprecated Use decodeTokenUnsafe instead */
+export declare function decodeToken(compact: string): object;
+
+/**
+ * Decode a compact token WITHOUT verifying the signature.
+ * For logging/debugging only — use verifyEngagementToken for security checks.
+ */
+export declare function decodeTokenUnsafe(compact: string): object & { _verified: false };

@@ -225,13 +225,19 @@ export function encodeToken(token) {
 }
 
 /**
- * Decode a compact string without verifying the signature.
- * Safe for logging/debugging; use verifyEngagementToken for security checks.
+ * Decode a compact string WITHOUT verifying the signature.
+ * For logging/debugging only — use verifyEngagementToken for security checks.
+ * Named 'Unsafe' to prevent accidental use in security-sensitive code paths.
  * @param {string} compact
- * @returns {object}
+ * @returns {object & { _verified: false }}
  */
+export function decodeTokenUnsafe(compact) {
+  return { ...(_decode(compact)), _verified: false };
+}
+
+/** @deprecated Use decodeTokenUnsafe instead */
 export function decodeToken(compact) {
-  return _decode(compact);
+  return decodeTokenUnsafe(compact);
 }
 
 // ── Risk assessment ───────────────────────────────────────────────────────────
@@ -304,13 +310,38 @@ function _sign({ v, n, iat, exp, idle, hw, evt }, secret) {
 }
 
 /**
- * Pure-JS timing-safe string comparison for hex strings.
- * Operates on char codes — constant time for equal-length inputs.
- * V8 does not optimize away XOR accumulation on Uint8 arithmetic.
+ * Timing-safe hex string comparison.
+ * Uses Node.js crypto.timingSafeEqual when available (server-side),
+ * falls back to constant-time XOR accumulation for browser contexts.
  */
+let _nodeTse = null;
+let _nodeTseLoaded = false;
+
 function _timingSafeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   if (a.length !== b.length) return false;
+
+  // Try Node.js built-in (loaded once, cached)
+  if (!_nodeTseLoaded) {
+    _nodeTseLoaded = true;
+    try {
+      // eslint-disable-next-line no-eval -- dynamic require avoids bundler issues
+      const crypto = typeof require === 'function'
+        ? require('node:crypto')
+        : null;
+      if (crypto?.timingSafeEqual) _nodeTse = crypto.timingSafeEqual;
+    } catch { /* browser — no node:crypto */ }
+  }
+
+  if (_nodeTse) {
+    try {
+      const bufA = Buffer.from(a, 'hex');
+      const bufB = Buffer.from(b, 'hex');
+      return bufA.length === bufB.length && _nodeTse(bufA, bufB);
+    } catch { /* fall through to XOR */ }
+  }
+
+  // Constant-time XOR accumulation fallback
   let diff = 0;
   for (let i = 0; i < a.length; i++) {
     diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -355,9 +386,9 @@ function _reject(reason, meta = {}) {
 }
 
 function _assertSecret(secret) {
-  if (!secret || typeof secret !== 'string' || secret.length < 16) {
+  if (!secret || typeof secret !== 'string' || secret.length < 32) {
     throw new Error(
-      '@svrnsec/pulse: engagement token secret must be ≥ 16 characters. ' +
+      '@svrnsec/pulse: engagement token secret must be ≥ 32 characters (256 bits). ' +
       'Generate one with: import { generateSecret } from "@svrnsec/pulse/challenge"'
     );
   }

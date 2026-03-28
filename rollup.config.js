@@ -29,7 +29,7 @@ export default [
   {
     input:   'src/index.js',
     output: {
-      file:                 'dist/pulse.cjs.js',
+      file:                 'dist/pulse.cjs',
       format:               'cjs',
       exports:              'named',
       sourcemap:            true,

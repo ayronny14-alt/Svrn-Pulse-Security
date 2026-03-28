@@ -18,7 +18,9 @@ import { blake3Hex } from '../proof/fingerprint.js';
 const SOFTWARE_RENDERER_PATTERNS = [
   'llvmpipe', 'swiftshader', 'softpipe', 'mesa offscreen',
   'microsoft basic render', 'vmware svga', 'virtualbox',
-  'parallels', 'angle (', 'google swiftshader',
+  'parallels', 'google swiftshader',
+  // Note: 'angle (' is intentionally excluded — Chrome on Windows uses ANGLE
+  // for all real hardware GPUs. Software ANGLE is handled by regex in gpu.js.
 ];
 
 // ---------------------------------------------------------------------------
@@ -227,6 +229,12 @@ function _renderMandelbrot(gl, canvas) {
   const y0 = Math.floor((H - 64) / 2);
   const pixels = new Uint8Array(64 * 64 * 4);
   gl.readPixels(x0, y0, 64, 64, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+  // Cleanup GPU resources
+  gl.deleteBuffer(buf);
+  gl.deleteProgram(prog);
+  gl.deleteShader(vs);
+  gl.deleteShader(fs);
 
   return pixels;
 }

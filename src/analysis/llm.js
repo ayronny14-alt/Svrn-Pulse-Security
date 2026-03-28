@@ -387,8 +387,9 @@ function _mean(arr) {
 }
 
 function _std(arr) {
+  if (arr.length < 2) return 0;
   const m = _mean(arr);
-  return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length);
+  return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / (arr.length - 1));
 }
 
 function _cv(arr) {

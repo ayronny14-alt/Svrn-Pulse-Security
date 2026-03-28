@@ -14,7 +14,11 @@ export function rateLimitMiddleware(req, res, next) {
     ?? TIER_LIMITS[keyRecord.tier]
     ?? TIER_LIMITS.starter;
 
-  const allowed = usageStore.check(apiKey, limitPerMin);
+  // Challenge requests cost half a unit to prevent nonce hoarding
+  const isChallenge = req.path.includes('/challenge');
+  const cost = isChallenge ? 0.5 : 1;
+
+  const allowed = usageStore.checkWeighted(apiKey, limitPerMin, cost);
   if (!allowed) {
     usageStore.track(apiKey, 'blocked');
     return res.status(429).json({

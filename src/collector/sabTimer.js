@@ -44,14 +44,10 @@ export function isSabAvailable() {
 
 /* ─── Atomics-based high-resolution clock ───────────────────────────────── */
 
-let _sab  = null;
-let _i32  = null;
-
-function _initSab() {
-  if (!_sab) {
-    _sab = new SharedArrayBuffer(4);
-    _i32 = new Int32Array(_sab);
-  }
+function _createSab() {
+  if (!isSabAvailable()) return null;
+  const sab = new SharedArrayBuffer(4);
+  return new Int32Array(sab);
 }
 
 /**
@@ -60,12 +56,12 @@ function _initSab() {
  * Much more accurate than setTimeout(fn, 0) or performance.now() loops.
  *
  * @param {number} us – microseconds to wait
+ * @param {Int32Array} i32 – shared int32 view
  * @returns {number}  actual elapsed ms
  */
-function _atomicsWait(us) {
-  _initSab();
+function _atomicsWait(us, i32) {
   const t0 = performance.now();
-  Atomics.wait(_i32, 0, 0, us / 1000); // Atomics.wait timeout is in ms
+  Atomics.wait(i32, 0, 0, us / 1000); // Atomics.wait timeout is in ms
   return performance.now() - t0;
 }
 
@@ -87,16 +83,19 @@ export function measureClamp() {
   for (let i = 0; i < 100; i++) {
     const t0 = performance.now();
     let t1 = t0;
-    while (t1 === t0) t1 = performance.now();
+    let attempts = 0;
+    while (t1 === t0 && attempts++ < 10000) t1 = performance.now();
     performanceDeltas.push((t1 - t0) * 1000); // convert to µs
   }
   performanceDeltas.sort((a, b) => a - b);
   const perfResolutionUs = performanceDeltas[Math.floor(performanceDeltas.length * 0.1)]; // 10th percentile
 
   // Measure actual OS timer resolution via Atomics.wait
+  const i32 = _createSab();
+  if (!i32) return { isClamped: false, clampAmountUs: 0, resolutionUs: 1000 };
   const atomicsDeltas = [];
   for (let i = 0; i < 20; i++) {
-    const elapsedMs = _atomicsWait(100); // wait 100µs
+    const elapsedMs = _atomicsWait(100, i32); // wait 100µs
     atomicsDeltas.push(Math.abs(elapsedMs * 1000 - 100)); // error from target
   }
   const atomicsErrorUs = atomicsDeltas.reduce((s, v) => s + v, 0) / atomicsDeltas.length;
@@ -136,25 +135,25 @@ export function collectHighResTimings(opts = {}) {
   const C = new Float64Array(N * N);
 
   const timings = new Array(iterations);
+  const _i32 = usingAtomics ? _createSab() : null;
 
   for (let iter = 0; iter < iterations; iter++) {
     C.fill(0);
 
-    if (usingAtomics) {
+    if (usingAtomics && _i32) {
       // ── Atomics path: start timing, do work, read Atomics-calibrated time ──
       // We use a sliding window approach: measure with Atomics.wait(0) which
       // returns immediately but the OS schedules give us a high-res timestamp
       // via the before/after pattern on the shared memory notification.
-      _initSab();
 
-      const tAtomicsBefore = _getAtomicsTs();
+      const tAtomicsBefore = _getAtomicsTs(_i32);
       for (let i = 0; i < N; i++) {
         for (let k = 0; k < N; k++) {
           const aik = A[i * N + k];
           for (let j = 0; j < N; j++) C[i * N + j] += aik * B[k * N + j];
         }
       }
-      const tAtomicsAfter = _getAtomicsTs();
+      const tAtomicsAfter = _getAtomicsTs(_i32);
       timings[iter] = (tAtomicsAfter - tAtomicsBefore) * 1000; // µs → ms
 
     } else {
@@ -184,8 +183,7 @@ export function collectHighResTimings(opts = {}) {
 // Use a write to shared memory + memory fence as a timestamp anchor.
 // This forces the CPU to flush its store buffer, giving a hardware-ordered
 // time reference that survives compiler reordering.
-function _getAtomicsTs() {
-  _initSab();
-  Atomics.store(_i32, 0, Atomics.load(_i32, 0) + 1);
+function _getAtomicsTs(i32) {
+  Atomics.store(i32, 0, Atomics.load(i32, 0) + 1);
   return performance.now();
 }

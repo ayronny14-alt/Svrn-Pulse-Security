@@ -63,6 +63,7 @@ export function run_entropy_probe(iterations, matrixSize = 64) {
 
   // Seed matrices with pseudo-random data (deterministic per call for
   // reproducibility, but different each run due to xorshift seeding from time).
+  // Zero-seed protection: xorshift has 0 as a fixed point, so we fall back to 0xdeadbeef if _now() truncates to 0
   let seed = (_now() * 1e6) | 0 || 0xdeadbeef;
   const xr  = () => { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
   for (let i = 0; i < N * N; i++) { A[i] = xr(); B[i] = xr(); }

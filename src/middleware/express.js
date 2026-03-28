@@ -151,5 +151,5 @@ function _reject(res, status, code, message, customHandler, req, result = {}) {
   if (customHandler) {
     return customHandler(req, res, { code, message, ...result });
   }
-  res.status(status).json({ error: code, message, ...result });
+  res.status(status).json({ error: code, message, valid: result?.valid, reasons: result?.reasons, riskFlags: result?.riskFlags });
 }

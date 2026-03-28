@@ -342,7 +342,7 @@ export class Fingerprint {
    *   - Not reversible: BLAKE3 hash, cannot recover original signals
    *   - Not a tracking cookie: no PII, no cross-origin data
    *
-   * @returns {string}  16-character hex ID
+   * @returns {string}  32-character hex ID (128-bit collision resistance)
    */
   hardwareId() {
     const { canvas, audio } = this._raw;
@@ -353,7 +353,7 @@ export class Fingerprint {
       audio?.sampleRate?.toString() ?? '',
       canvas?.webglVersion?.toString() ?? '',
     ].join('|');
-    return blake3HexStr(components).slice(0, 16);
+    return blake3HexStr(components).slice(0, 32);
   }
 
   // ── Diagnostic data ────────────────────────────────────────────────────────

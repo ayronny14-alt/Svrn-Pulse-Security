@@ -132,6 +132,7 @@ export function testTimestampRhythm(tokens) {
   const ac1 = _autocorrAtLag(deltas, mean, v0, 1);
   const ac2 = _autocorrAtLag(deltas, mean, v0, 2);
 
+  // Both positive autocorrelation (rhythmic dispatch from farm coordinator) and negative autocorrelation (perfectly alternating patterns) are treated as suspicious signals.
   // Use the more suspicious of the two lags
   const signal = Math.max(Math.abs(ac1), Math.abs(ac2));
 

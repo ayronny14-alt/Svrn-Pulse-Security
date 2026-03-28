@@ -232,9 +232,9 @@ function _sign(nonce, issuedAt, expiresAt, secret) {
 }
 
 function _assertSecret(secret) {
-  if (!secret || typeof secret !== 'string' || secret.length < 16) {
+  if (!secret || typeof secret !== 'string' || secret.length < 32) {
     throw new Error(
-      '@svrnsec/pulse: secret must be a string of at least 16 characters. ' +
+      '@svrnsec/pulse: secret must be a string of at least 32 characters (256 bits). ' +
       'Generate one with: import { generateSecret } from "@svrnsec/pulse/challenge"'
     );
   }

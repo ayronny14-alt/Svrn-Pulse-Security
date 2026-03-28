@@ -174,7 +174,7 @@ function _calibratePassSize(buf) {
   if (dummy === 0) buf[0] = 1; // prevent DCE
 
   if (elapsed <= 0) return n;
-  return Math.min(buf.length, Math.round(n * (target / elapsed)));
+  return Math.max(1, Math.min(buf.length, Math.round(n * (target / elapsed))));
 }
 
 function _mean(arr) {

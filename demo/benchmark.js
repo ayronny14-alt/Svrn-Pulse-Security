@@ -40,7 +40,7 @@ function localMachine(n, seed) {
   return out;
 }
 
-// Remote VM: 192.222.57.254 — KVM hypervisor, 2 vCPU, Ubuntu 22.04
+// Remote VM: KVM hypervisor, 12 vCPU, NVIDIA GH200 Grace Hopper, Ubuntu 22.04
 function remoteVM(n, seed) {
   const rand = makeLcg(seed);
   const out  = [];
@@ -160,7 +160,7 @@ console.log('  p50/p95: ' + local.p50.mean.toFixed(2) + 'ms / ' + local.p95.mean
 console.log();
 console.log(histogram(local.sample, 20, 36, 'Local'));
 console.log();
-console.log('  REMOTE VM (192.222.57.254, KVM 2vCPU, Ubuntu 22.04)');
+console.log('  REMOTE VM (KVM 12vCPU, GH200 Grace Hopper, Ubuntu 22.04)');
 console.log('  Score:  ' + scoreBar(vm.score.mean));
 console.log('  CV:     ' + vm.cv.mean.toFixed(4) + '  (range ' + vm.cv.min.toFixed(4) + '–' + vm.cv.max.toFixed(4) + ')');
 console.log('  Hurst:  ' + vm.hurst.mean.toFixed(4));

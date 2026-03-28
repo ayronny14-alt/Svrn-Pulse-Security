@@ -194,6 +194,7 @@ const PROFILES = {
 // ─── Calibration ─────────────────────────────────────────────────────────────
 
 /** @type {RefractionProfile|null} */
+// Module-level singleton — environment-specific. Not safe to share between server-side and client-side timing data. Use resetProfile() to clear.
 let _cached = null;
 
 /**

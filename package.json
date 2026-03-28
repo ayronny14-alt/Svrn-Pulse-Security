@@ -1,6 +1,6 @@
 {
   "name": "@svrnsec/pulse",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Physical Turing Test — Idle attestation, population-level Sybil detection, and engagement tokens that defeat click farms at the physics layer.",
   "type": "module",
   "license": "MIT",
@@ -106,6 +106,7 @@
     "bin/",
     "src/",
     "index.d.ts",
+    "README.md",
     "SECURITY.md"
   ],
   "scripts": {

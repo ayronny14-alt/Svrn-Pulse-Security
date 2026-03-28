@@ -17,7 +17,7 @@
  * });
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 // Lazy import — only loaded in browser, allows tree-shaking in SSR builds
 let _pulseModule = null;
@@ -132,6 +132,7 @@ export function usePulse(opts = {}) {
           headers,
           body:    JSON.stringify({ payload: commitment.payload, hash: commitment.hash }),
         });
+        if (!res.ok) throw new Error('Verify failed: ' + res.status);
         const verifyResult = await res.json();
         setResult(verifyResult);
         onResult?.(verifyResult, commitment);
@@ -155,14 +156,12 @@ export function usePulse(opts = {}) {
   }, []);
 
   // ── autoRun on mount ──────────────────────────────────────────────────────
-  // Note: We use a ref to avoid triggering on every render.
-  // Consumers should wrap in useEffect if they need SSR safety:
-  // useEffect(() => { if (autoRun) run(); }, []);
-  if (autoRun && !hasAutoRun.current && typeof window !== 'undefined') {
-    hasAutoRun.current = true;
-    // Defer to next microtask so hook state is initialised
-    Promise.resolve().then(run);
-  }
+  useEffect(() => {
+    if (autoRun && !hasAutoRun.current) {
+      hasAutoRun.current = true;
+      run();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     // Actions

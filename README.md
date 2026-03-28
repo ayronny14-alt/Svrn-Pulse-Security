@@ -46,10 +46,17 @@ import { pulse } from '@svrnsec/pulse';
 const { payload, hash } = await pulse({ nonce: crypto.randomUUID() });
 // payload.classification.jitterScore → 0.798 (real hw) | 0.45 (VM)
 // payload.classification.flags      → [] (clean) | ['CV_TOO_HIGH_...'] (VM)
-// hash → SHA-256 commitment you send to your server for validation
+// hash → BLAKE3 commitment you send to your server for validation
 ```
 
-No API key. No account. No data leaves the client. Runs entirely in your infrastructure.
+**Self-hosted mode:** No API key. No account. No data leaves the client. Runs entirely in your infrastructure.
+
+**Hosted API mode:** Zero server setup — pass an `apiKey` and the SDK handles challenge/verify automatically:
+
+```js
+const result = await pulse({ apiKey: 'sk_live_...' });
+// result.result.valid, result.result.score, result.result.confidence
+```
 
 ---
 
@@ -86,7 +93,7 @@ hotQE / coldQE  ≥ 1.08  →  thermal feedback confirmed (real silicon)
 hotQE / coldQE  ≈ 1.00  →  clock is insensitive to guest thermal state (VM)
 ```
 
-A KVM hypervisor maintains a synthetic clock that ticks at a constant rate regardless of what the guest OS is doing. Its entropy ratio across cold/load/hot phases is flat. On 192.222.57.254 — a 12 vCPU / 480GB RAM / GH200 Grace Hopper machine — it measured 1.01. On the local GTX 1650 Super machine it measured 1.24.
+A KVM hypervisor maintains a synthetic clock that ticks at a constant rate regardless of what the guest OS is doing. Its entropy ratio across cold/load/hot phases is flat. On a KVM VM (12 vCPU / 480GB RAM / GH200 Grace Hopper) it measured 1.01. On a local GTX 1650 Super machine it measured 1.24.
 
 A software implementation cannot fake this without generating actual heat.
 
@@ -100,7 +107,7 @@ If you measure H=0.5 but find high autocorrelation — or low H but low autocorr
 
 High coefficient of variation (timing spread) must come from a genuinely spread-out distribution, which means high quantization entropy. A VM that inflates CV by adding synthetic outliers at fixed offsets — say, every 50th iteration triggers a steal-time burst — produces high CV but low entropy because 93% of samples still fall in two bins.
 
-From 192.222.57.254 (GH200): CV=0.0829 (seems variable) but QE=1.27 bits (extreme clustering). Incoherent. On real hardware, CV=0.1494 → QE=3.59 bits. Coherent.
+From a KVM GH200 VM: CV=0.0829 (seems variable) but QE=1.27 bits (extreme clustering). Incoherent. On real hardware, CV=0.1494 → QE=3.59 bits. Coherent.
 
 ### 4. The Picket Fence Detector
 
@@ -160,7 +167,7 @@ Normal bell curve, right-tailed from OS preemptions. Exactly what Brownian timin
 
 ---
 
-### Remote VM — 192.222.57.254 — KVM · 12 vCPU · 480GB RAM · NVIDIA GH200 Grace Hopper · Ubuntu 22.04
+### Remote VM — KVM · 12 vCPU · 480GB RAM · NVIDIA GH200 Grace Hopper · Ubuntu 22.04
 
 ```
 Pulse Score  [██████████████████░░░░░░░░░░░░░░░░░░░░░░] 45.0%
@@ -215,7 +222,7 @@ Physical desktop       ~120        ~2.1s       40%
 Ambiguous              200         ~3.5s        —
 ```
 
-The 192.222.57.254 GH200 VM hit the exit condition at iteration 50. 480GB of RAM and a Grace Hopper Superchip cannot change the fact that the hypervisor clock is mathematically perfect. The signal was conclusive within the first batch.
+The GH200 VM hit the exit condition at iteration 50. 480GB of RAM and a Grace Hopper Superchip cannot change the fact that the hypervisor clock is mathematically perfect. The signal was conclusive within the first batch.
 
 ---
 
@@ -290,7 +297,7 @@ fp.topFlag            // 'PICKET_FENCE_DETECTED'
 fp.findings           // full heuristic engine report
 fp.physicalEvidence   // confirmed physical properties (bonuses)
 
-fp.hardwareId()       // stable 16-char hex ID — BLAKE3(GPU + audio signals)
+fp.hardwareId()       // stable 32-char hex ID — BLAKE3(GPU + audio signals), 128-bit collision resistance
 fp.metrics()          // flat object of all numeric metrics for logging
 fp.toCommitment()     // { payload, hash } — send to server
 ```
@@ -633,6 +640,100 @@ const report = authenticityAudit(tokenCohort, { confidenceLevel: 0.95 });
 
 ---
 
+## HMAC-Signed Challenge Protocol
+
+Plain random nonces prevent replay attacks but not forged challenges. The challenge module adds server-signed HMAC authentication:
+
+```js
+import { createChallenge, verifyChallenge, generateSecret } from '@svrnsec/pulse/challenge';
+
+// One-time setup: generate a 256-bit secret
+const secret = generateSecret(); // store in env vars
+
+// Challenge endpoint
+app.get('/api/challenge', (req, res) => {
+  const challenge = createChallenge(secret);
+  await redis.set(`pulse:${challenge.nonce}`, '1', 'EX', 300);
+  res.json(challenge);
+});
+
+// Verify endpoint — validates HMAC before processing the proof
+app.post('/api/verify', async (req, res) => {
+  const { valid, reason } = await verifyChallenge(req.body.challenge, secret, {
+    checkNonce: async (n) => (await redis.del(`pulse:${n}`)) === 1,
+  });
+  if (!valid) return res.status(400).json({ error: reason });
+  // ... proceed with validateProof
+});
+```
+
+The HMAC covers `nonce|issuedAt|expiresAt` — altering any field breaks the signature. Timing-safe comparison prevents side-channel attacks on the signature verification.
+
+---
+
+## Coordinated Behavior Detection
+
+Detects coordinated inauthentic behavior across a cohort of engagement tokens using five independent analysis layers:
+
+```js
+import { detectCoordinatedBehavior } from '@svrnsec/pulse/coordination';
+
+const result = detectCoordinatedBehavior(tokenCohort);
+// result.clusters — detected bot farm clusters with similarity scores
+// result.coordinationScore — 0-100, higher = more coordinated
+```
+
+**Analysis layers:**
+- **Temporal clustering** — Poisson test on arrival time distributions
+- **Signal fingerprint collision** — Entropy band / thermal label / motor band hash matching
+- **Drift fingerprinting** — Clock drift rate convergence across devices
+- **Mutual information matrix** — Louvain-lite community detection
+- **Entropy velocity** — Shannon entropy growth rate vs traffic growth
+
+---
+
+## LLM Agent Detection
+
+Detects AI-controlled headless browsers (AutoGPT, Playwright+LLM, browser agents) through behavioral biometrics:
+
+```js
+import { detectLlmAgent } from '@svrnsec/pulse/llm';
+
+const result = detectLlmAgent(bioSnapshot);
+// result.aiConf     — 0-1 confidence this is an AI agent
+// result.humanConf  — 0-1 confidence this is a human
+// result.verdict    — 'human' | 'ai_agent' | 'ambiguous'
+```
+
+**Six behavioral signals:**
+1. Think-time pattern — LLMs produce characteristic pause distributions
+2. Mouse path smoothness — Bezier-interpolated paths vs. natural micro-tremor
+3. Keystroke correction rate — Humans make typos; LLMs don't backspace
+4. Physiological tremor — 8-12 Hz micro-oscillation present in all human motor control
+5. Inter-event gap distribution — LLM response latencies cluster differently than human reaction times
+6. Motor consistency — AI agents maintain unnaturally consistent click precision
+
+TrustScore hard cap: AI agent confidence > 0.85 caps the score at 30.
+
+---
+
+## Refraction — Cross-Environment Timer Calibration
+
+Different environments have different timer resolutions. Refraction automatically calibrates scoring thresholds:
+
+```js
+import { calibrate, getProfile } from '@svrnsec/pulse/refraction';
+
+const profile = await calibrate();
+// profile.env — 'browser' | 'node' | 'deno' | 'worker'
+// profile.grain — timer resolution in ms
+// profile.thresholds — adjusted scoring thresholds for this environment
+```
+
+The calibration profile adjusts all downstream analysis so a 100us-clamped Brave browser and a nanosecond-precision Node.js process are scored against appropriate baselines.
+
+---
+
 ## Tests
 
 ```bash
@@ -735,7 +836,7 @@ Nothing leaves the browser except a ~1.6KB statistical summary:
 
 The server receives enough to verify the proof. Not enough to reconstruct any original signal. Not enough to re-identify a user across sessions.
 
-`hardwareId()` is a BLAKE3 hash of GPU renderer string + audio sample rate. Stable per physical device, not reversible, not cross-origin linkable.
+`hardwareId()` is a 128-bit BLAKE3 hash of GPU renderer string + audio sample rate. Stable per physical device, not reversible, not cross-origin linkable.
 
 ---
 

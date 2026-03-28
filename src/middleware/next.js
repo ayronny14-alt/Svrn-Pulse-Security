@@ -42,9 +42,8 @@ import { validateProof, generateNonce } from '../proof/validator.js';
 // Shared in-memory nonce store (single instance / dev only)
 // ---------------------------------------------------------------------------
 
-const _memStore = new Map();
-
 function memoryStore(ttlSec) {
+  const _memStore = new Map();
   return {
     set(key) {
       _memStore.set(key, Date.now() + ttlSec * 1000);

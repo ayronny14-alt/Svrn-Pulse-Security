@@ -467,27 +467,46 @@ function buildSimilarityGraph(vectors, threshold) {
     }
   }
 
-  // Near matches: check Hamming distance ≤ 1 between bucket keys
+  // Near matches: for each bucket key, generate all Hamming-distance-1 neighbors
+  // and check if they exist. O(k * d * v) instead of O(k²) where k = number of
+  // unique keys, d = dimensions, v = unique values per dimension.
   const keys = [...buckets.keys()];
-  for (let a = 0; a < keys.length; a++) {
-    const va = keys[a].split(',').map(Number);
-    for (let b = a + 1; b < keys.length; b++) {
-      const vb = keys[b].split(',').map(Number);
-      let dist = 0;
-      for (let d = 0; d < va.length; d++) {
-        if (va[d] !== vb[d]) dist++;
-      }
-      if (dist <= 1) {
-        // Connect all pairs between these two buckets
-        const ga = buckets.get(keys[a]);
-        const gb = buckets.get(keys[b]);
-        for (const i of ga) {
-          for (const j of gb) {
-            adjacency[i].push(j);
-            adjacency[j].push(i);
-            edges++;
+  const keySet = new Set(keys);
+
+  // Collect all unique values per dimension for neighbor generation
+  const allParts = keys.map(k => k.split(','));
+  const dims = allParts[0]?.length ?? 0;
+  const uniquePerDim = [];
+  for (let d = 0; d < dims; d++) {
+    uniquePerDim.push(new Set(allParts.map(p => p[d])));
+  }
+
+  const visitedPairs = new Set();
+  for (const key of keys) {
+    const parts = key.split(',');
+    for (let dim = 0; dim < parts.length; dim++) {
+      const original = parts[dim];
+      for (const alt of uniquePerDim[dim]) {
+        if (alt === original) continue;
+        parts[dim] = alt;
+        const neighborKey = parts.join(',');
+        if (keySet.has(neighborKey)) {
+          // Avoid processing the same pair twice
+          const pairId = key < neighborKey ? `${key}|${neighborKey}` : `${neighborKey}|${key}`;
+          if (!visitedPairs.has(pairId)) {
+            visitedPairs.add(pairId);
+            const ga = buckets.get(key);
+            const gb = buckets.get(neighborKey);
+            for (const i of ga) {
+              for (const j of gb) {
+                adjacency[i].push(j);
+                adjacency[j].push(i);
+                edges++;
+              }
+            }
           }
         }
+        parts[dim] = original;
       }
     }
   }

@@ -12,7 +12,8 @@
 // ---------------------------------------------------------------------------
 // Internal state
 // ---------------------------------------------------------------------------
-const MAX_EVENTS = 500; // rolling buffer cap
+const MAX_EVENTS     = 500; // rolling buffer cap
+const MAX_KEY_STATES = 50;  // cap on simultaneous tracked key states
 
 // ---------------------------------------------------------------------------
 // BioCollector class
@@ -55,6 +56,8 @@ export class BioCollector {
       window.removeEventListener('keydown',     this._onKeyDown);
       window.removeEventListener('keyup',       this._onKeyUp);
     }
+
+    this._lastMouse = null;
   }
 
   // ── Event handlers ────────────────────────────────────────────────────────
@@ -83,6 +86,12 @@ export class BioCollector {
     const t = e.timeStamp ?? performance.now();
     // Store timestamp keyed by code (NOT key label)
     this._lastKey[e.code] = { downAt: t };
+    // Prevent unbounded growth if keys are held without keyup
+    if (Object.keys(this._lastKey).length > MAX_KEY_STATES) {
+      const oldest = Object.entries(this._lastKey)
+        .sort((a, b) => a[1].downAt - b[1].downAt)[0];
+      if (oldest) delete this._lastKey[oldest[0]];
+    }
   }
 
   _onKeyUp(e) {
@@ -249,6 +258,7 @@ function _computeInterference(mouseEvents, keyEvents, timings) {
   const WINDOW_MS = 16;
   const meanTiming = _mean(timings);
 
+  // Note: timing alignment is approximate; probe start timestamp would improve accuracy
   // We need absolute timestamps for the probe samples.
   // We don't have them directly – use relative index spacing as a proxy.
   // The entropy probe runs for ~(mean * n) ms starting at collectedAt.

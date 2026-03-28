@@ -5,7 +5,7 @@ import { config } from './config.js';
 /**
  * Fire a webhook to the API key's configured webhookUrl.
  * Signed with HMAC-SHA256 so the receiver can verify authenticity.
- * Non-blocking — errors are logged but never bubble up to the request.
+ * Non-blocking — errors are logged as structured JSON for audit trail.
  */
 export async function fireWebhook(keyRecord, event, payload) {
   const url = keyRecord.webhookUrl;
@@ -28,9 +28,22 @@ export async function fireWebhook(keyRecord, event, payload) {
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) {
-      console.warn(`[pulse-api] webhook to ${url} returned ${res.status}`);
+      console.error(JSON.stringify({
+        ts:      Date.now(),
+        event:   'webhook.delivery_failed',
+        url,
+        status:  res.status,
+        key:     keyRecord.name,
+        reason:  `HTTP ${res.status}`,
+      }));
     }
   } catch (err) {
-    console.error(`[pulse-api] webhook to ${url} failed:`, err.message);
+    console.error(JSON.stringify({
+      ts:      Date.now(),
+      event:   'webhook.delivery_error',
+      url,
+      key:     keyRecord.name,
+      error:   err.message,
+    }));
   }
 }

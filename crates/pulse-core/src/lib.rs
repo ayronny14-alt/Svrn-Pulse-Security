@@ -79,7 +79,7 @@ pub fn run_entropy_probe(iterations: u32, matrix_size: u32) -> ProbeResult {
     let total = n * n;
 
     // Seed matrices with LCG values so the compiler can't constant-fold them.
-    let mut rng = Lcg::new(0x1234_5678_9ABC_DEF0);
+    let mut rng = Lcg::new((perf_now() * 1e6) as u64 | 0xDEAD);
     let mut a: Vec<f64> = (0..total).map(|_| rng.next_f64()).collect();
     let mut b: Vec<f64> = (0..total).map(|_| rng.next_f64()).collect();
     let mut c = vec![0f64; total];

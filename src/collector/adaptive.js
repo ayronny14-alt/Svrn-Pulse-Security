@@ -134,7 +134,7 @@ export async function collectEntropyAdaptive(wasmModule, opts = {}) {
           : (sig.vmConf > 0.45 || sig.hwConf > 0.45) ? 'borderline'
           : 'uncertain',
         });
-      } catch {}
+      } catch (e) { if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') console.error('[pulse] onBatch error:', e); }
     }
 
     // ── Early-exit checks ──────────────────────────────────────────────────

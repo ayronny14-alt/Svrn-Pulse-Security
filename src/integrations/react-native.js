@@ -85,10 +85,12 @@ async function _collectSensors(durationMs = 3000) {
     const accelSub = Accelerometer.addListener(({ x, y, z }) => accel.push([x, y, z]));
     const gyroSub  = Gyroscope.addListener(({ x, y, z })      => gyro.push([x, y, z]));
 
-    await new Promise(r => setTimeout(r, durationMs));
-
-    accelSub.remove();
-    gyroSub.remove();
+    try {
+      await new Promise(r => setTimeout(r, durationMs));
+    } finally {
+      accelSub.remove();
+      gyroSub.remove();
+    }
   } catch {
     // expo-sensors not available — return empty arrays
   }
@@ -413,6 +415,7 @@ export function usePulseNative(opts = {}) {
           },
           body: JSON.stringify(proofData),
         });
+        if (!vRes.ok) throw new Error('Verify failed: ' + vRes.status);
         const result = await vRes.json();
         proofData.result = result;
         setProof(proofData);

@@ -235,6 +235,19 @@ function _clusterKey(token) {
 // ── Bootstrap CI ──────────────────────────────────────────────────────────────
 
 /**
+ * Splitmix32 deterministic PRNG seeded from input data.
+ * Replaces Math.random() for reproducible bootstrap results.
+ */
+function _splitmix32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x9e3779b9 | 0;
+    let t = seed ^ seed >>> 16; t = Math.imul(t, 0x21f0aaad);
+    t = t ^ t >>> 15; t = Math.imul(t, 0x735a2d97);
+    return ((t = t ^ t >>> 15) >>> 0) / 4294967296;
+  };
+}
+
+/**
  * Non-parametric bootstrap confidence interval on the mean of a 0/1 vector.
  *
  * @param {number[]} values   0 (fraudulent) or 1 (authentic) per token
@@ -246,12 +259,14 @@ function _bootstrapCI(values, level, iters) {
   const n = values.length;
   if (n === 0) return [0, 0];
 
+  const seed = values.reduce((s, v) => (s * 31 + (v * 1000 | 0)) | 0, 0);
+  const rand = _splitmix32(seed);
   const means = new Float64Array(iters);
 
   for (let i = 0; i < iters; i++) {
     let sum = 0;
     for (let j = 0; j < n; j++) {
-      sum += values[(Math.random() * n) | 0];
+      sum += values[(rand() * n) | 0];
     }
     means[i] = (sum / n) * 100;
   }

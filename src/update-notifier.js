@@ -93,8 +93,10 @@ function _box(lines, opts = {}) {
 /* ─── version comparison ─────────────────────────────────────────────────── */
 
 function _semverGt(a, b) {
-  const pa = a.replace(/[^0-9.]/g, '').split('.').map(Number);
-  const pb = b.replace(/[^0-9.]/g, '').split('.').map(Number);
+  const [aVer] = a.split('-');
+  const [bVer] = b.split('-');
+  const pa = aVer.split('.').map(Number);
+  const pb = bVer.split('.').map(Number);
   for (let i = 0; i < 3; i++) {
     const da = pa[i] ?? 0, db = pb[i] ?? 0;
     if (da > db) return true;
@@ -113,7 +115,7 @@ async function _fetchLatest(pkg) {
     const timeout = setTimeout(() => done(null), 3_000);
 
     try {
-      const https = require('https');
+      const https = _require('https');
       const req   = https.get(
         `https://registry.npmjs.org/${encodeURIComponent(pkg)}/latest`,
         { headers: { 'Accept': 'application/json', 'User-Agent': `${pkg}/${_currentVersion}` } },
@@ -137,15 +139,8 @@ async function _fetchLatest(pkg) {
 }
 
 // Lazy require for Node.js https module (avoids bundler issues)
-let _httpsReq = null;
-function require(m) {
-  if (typeof globalThis.require === 'function') return globalThis.require(m);
-  // CJS interop — only used server-side
-  if (typeof process !== 'undefined') {
-    const mod = process.mainModule?.require ?? (() => null);
-    return mod(m);
-  }
-  return null;
+function _require(m) {
+  return createRequire(import.meta.url)(m);
 }
 
 /* ─── checkForUpdate ─────────────────────────────────────────────────────── */

@@ -116,6 +116,8 @@ export async function collectGpuEntropy(opts = {}) {
   const adapterInfo = adapter.info ?? {};
   const isSoftware  = detectSoftwareRenderer(adapterInfo);
 
+  device.lost.then(info => console.warn('[pulse] GPU device lost:', info.message));
+
   // Compile the shader module once
   const shaderModule = device.createShaderModule({ code: SHADER_SRC });
 
@@ -125,85 +127,86 @@ export async function collectGpuEntropy(opts = {}) {
   const bufB = _createBuffer(device, bufSize, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
   const bufC = _createBuffer(device, bufSize, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
 
-  // Seed with random data
-  const matData = new Float32Array(4096).map(() => Math.random());
-  device.queue.writeBuffer(bufA, 0, matData);
-  device.queue.writeBuffer(bufB, 0, matData);
+  try {
+    // Seed with random data
+    const matData = new Float32Array(4096).map(() => Math.random());
+    device.queue.writeBuffer(bufA, 0, matData);
+    device.queue.writeBuffer(bufB, 0, matData);
 
-  const pipeline = device.createComputePipeline({
-    layout: 'auto',
-    compute: { module: shaderModule, entryPoint: 'main' },
-  });
+    const pipeline = device.createComputePipeline({
+      layout: 'auto',
+      compute: { module: shaderModule, entryPoint: 'main' },
+    });
 
-  const bindGroup = device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
-    entries: [
-      { binding: 0, resource: { buffer: bufA } },
-      { binding: 1, resource: { buffer: bufB } },
-      { binding: 2, resource: { buffer: bufC } },
-    ],
-  });
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: bufA } },
+        { binding: 1, resource: { buffer: bufB } },
+        { binding: 2, resource: { buffer: bufC } },
+      ],
+    });
 
-  // ── Probe ──────────────────────────────────────────────────────────────
-  async function runPhase(n) {
-    const timings = [];
-    for (let i = 0; i < n; i++) {
-      const t0 = performance.now();
-      const encoder = device.createCommandEncoder();
-      const pass    = encoder.beginComputePass();
-      pass.setPipeline(pipeline);
-      pass.setBindGroup(0, bindGroup);
-      pass.dispatchWorkgroups(8, 8); // 64 workgroups total
-      pass.end();
-      device.queue.submit([encoder.finish()]);
-      await device.queue.onSubmittedWorkDone();
-      const t1 = performance.now();
-      timings.push(t1 - t0);
+    // ── Probe ──────────────────────────────────────────────────────────────
+    async function runPhase(n) {
+      const timings = [];
+      for (let i = 0; i < n; i++) {
+        const t0 = performance.now();
+        const encoder = device.createCommandEncoder();
+        const pass    = encoder.beginComputePass();
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, bindGroup);
+        pass.dispatchWorkgroups(8, 8); // 64 workgroups total
+        pass.end();
+        device.queue.submit([encoder.finish()]);
+        await device.queue.onSubmittedWorkDone();
+        const t1 = performance.now();
+        timings.push(t1 - t0);
+      }
+      return timings;
     }
-    return timings;
+
+    let coldTimings, loadTimings, hotTimings;
+
+    if (phased) {
+      coldTimings = await runPhase(Math.floor(iterations * 0.25));
+      loadTimings = await runPhase(Math.floor(iterations * 0.50));
+      hotTimings  = await runPhase(iterations - coldTimings.length - loadTimings.length);
+    } else {
+      coldTimings = await runPhase(iterations);
+      loadTimings = [];
+      hotTimings  = [];
+    }
+
+    const allTimings = [...coldTimings, ...loadTimings, ...hotTimings];
+    const mean       = _mean(allTimings);
+    const cv         = mean > 0 ? _std(allTimings) / mean : 0;
+
+    const coldMean = _mean(coldTimings);
+    const hotMean  = _mean(hotTimings.length ? hotTimings : coldTimings);
+    const thermalGrowth = coldMean > 0 ? (hotMean - coldMean) / coldMean : 0;
+
+    return {
+      gpuPresent:    true,
+      isSoftware,
+      vendor:        adapterInfo.vendor      ?? 'unknown',
+      architecture:  adapterInfo.architecture ?? 'unknown',
+      timings:       allTimings,
+      dispatchCV:    cv,
+      thermalGrowth,
+      coldMean,
+      hotMean,
+      // Heuristic: real GPU → thermalGrowth > 0.02 and CV > 0.04
+      // Software renderer → thermalGrowth ≈ 0, CV < 0.02
+      verdict: isSoftware ? 'software_renderer'
+        : thermalGrowth > 0.02 && cv > 0.04 ? 'real_gpu'
+        : thermalGrowth < 0 && cv < 0.02   ? 'virtual_gpu'
+        : 'ambiguous',
+    };
+  } finally {
+    bufA.destroy(); bufB.destroy(); bufC.destroy();
+    device.destroy();
   }
-
-  let coldTimings, loadTimings, hotTimings;
-
-  if (phased) {
-    coldTimings = await runPhase(Math.floor(iterations * 0.25));
-    loadTimings = await runPhase(Math.floor(iterations * 0.50));
-    hotTimings  = await runPhase(iterations - coldTimings.length - loadTimings.length);
-  } else {
-    coldTimings = await runPhase(iterations);
-    loadTimings = [];
-    hotTimings  = [];
-  }
-
-  // Cleanup
-  bufA.destroy(); bufB.destroy(); bufC.destroy();
-  device.destroy();
-
-  const allTimings = [...coldTimings, ...loadTimings, ...hotTimings];
-  const mean       = _mean(allTimings);
-  const cv         = mean > 0 ? _std(allTimings) / mean : 0;
-
-  const coldMean = _mean(coldTimings);
-  const hotMean  = _mean(hotTimings.length ? hotTimings : coldTimings);
-  const thermalGrowth = coldMean > 0 ? (hotMean - coldMean) / coldMean : 0;
-
-  return {
-    gpuPresent:    true,
-    isSoftware,
-    vendor:        adapterInfo.vendor      ?? 'unknown',
-    architecture:  adapterInfo.architecture ?? 'unknown',
-    timings:       allTimings,
-    dispatchCV:    cv,
-    thermalGrowth,
-    coldMean,
-    hotMean,
-    // Heuristic: real GPU → thermalGrowth > 0.02 and CV > 0.04
-    // Software renderer → thermalGrowth ≈ 0, CV < 0.02
-    verdict: isSoftware ? 'software_renderer'
-      : thermalGrowth > 0.02 && cv > 0.04 ? 'real_gpu'
-      : thermalGrowth < 0 && cv < 0.02   ? 'virtual_gpu'
-      : 'ambiguous',
-  };
 }
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */

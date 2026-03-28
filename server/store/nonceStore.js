@@ -1,29 +1,33 @@
 // server/store/nonceStore.js
-// In-memory nonce store with lazy expiry cleanup.
+// In-memory nonce store with periodic expiry cleanup.
 // For multi-instance production: replace with Redis (same interface).
 
-const _store = new Map(); // key → expiresAt
-
 export function createNonceStore(ttlSec = 300) {
+  const store = new Map(); // key → expiresAt
+
+  // Periodic cleanup every 30 seconds instead of inline-on-threshold
+  const cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [k, exp] of store) {
+      if (exp < now) store.delete(k);
+    }
+  }, 30_000);
+  // Allow the process to exit even if cleanup is pending
+  if (cleanupInterval.unref) cleanupInterval.unref();
+
   return {
     set(key) {
-      _store.set(key, Date.now() + ttlSec * 1000);
-      // Lazy cleanup when store grows large
-      if (_store.size > 50_000) {
-        const now = Date.now();
-        for (const [k, exp] of _store) {
-          if (exp < now) _store.delete(k);
-        }
-      }
+      store.set(key, Date.now() + ttlSec * 1000);
     },
     consume(key) {
-      const exp = _store.get(key);
+      const exp = store.get(key);
       if (!exp || Date.now() > exp) return false;
-      _store.delete(key);
+      // Atomic check-and-delete: single synchronous block in Node.js
+      store.delete(key);
       return true;
     },
     size() {
-      return _store.size;
+      return store.size;
     },
   };
 }

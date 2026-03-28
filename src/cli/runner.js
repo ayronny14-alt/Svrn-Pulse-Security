@@ -61,16 +61,6 @@ ${gy('  Docs: https://github.com/ayronny14-alt/Svrn-Pulse-Security#readme')}
 }
 
 async function cmdChallenge(args) {
-  const secret = args.get('secret') ?? process.env.PULSE_SECRET;
-  if (!secret) {
-    process.stderr.write(
-      ye('⚠ ') + 'No secret provided.\n' +
-      gy('  Pass --secret <value> or set PULSE_SECRET env var.\n') +
-      gy('  Generate one: ') + cy('npx svrnsec-pulse challenge --generate-secret\n')
-    );
-    process.exit(1);
-  }
-
   if (args.has('generate-secret')) {
     const { generateSecret } = await import('../proof/challenge.js');
     const s = generateSecret();
@@ -81,6 +71,16 @@ async function cmdChallenge(args) {
       process.stdout.write(s + '\n');
     }
     return;
+  }
+
+  const secret = args.get('secret') ?? process.env.PULSE_SECRET;
+  if (!secret) {
+    process.stderr.write(
+      ye('⚠ ') + 'No secret provided.\n' +
+      gy('  Pass --secret <value> or set PULSE_SECRET env var.\n') +
+      gy('  Generate one: ') + cy('npx svrnsec-pulse challenge --generate-secret\n')
+    );
+    process.exit(1);
   }
 
   const { createChallenge } = await import('../proof/challenge.js');
