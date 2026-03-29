@@ -5,32 +5,30 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Security Policy](https://img.shields.io/badge/security-policy-orange.svg)](./SECURITY.md)
 
-A hardware-physics probe that distinguishes real consumer silicon from sanitised cloud VMs and AI inference endpoints.
+Hardware-physics probe that tells real silicon apart from cloud VMs and AI inference endpoints.
 
-It does not maintain a database of known bad actors. It measures thermodynamic constants.
+No database of known bad actors. Just thermodynamics.
 
 ---
 
-## 30-Second Quickstart
+## Quickstart
 
 ```bash
 npm install @svrnsec/pulse
 ```
 
 ```js
-// Express — drop-in server-side verification
+// Express — drop-in
 import { createPulseMiddleware } from '@svrnsec/pulse/middleware/express';
-
 app.use('/api', createPulseMiddleware({ minScore: 0.6 }));
 ```
 
 ```jsx
-// React — live probe with real-time signal meters
+// React
 import { usePulse } from '@svrnsec/pulse/react';
 
 function TrustGate() {
   const { run, pct, vmConf, hwConf, earlyVerdict, result } = usePulse();
-
   return (
     <button onClick={run}>
       {pct < 100 ? `Probing… ${pct}%` : earlyVerdict}
@@ -40,236 +38,215 @@ function TrustGate() {
 ```
 
 ```js
-// Node.js — raw proof commitment
+// Node — raw proof
 import { pulse } from '@svrnsec/pulse';
 
 const { payload, hash } = await pulse({ nonce: crypto.randomUUID() });
 // payload.classification.jitterScore → 0.798 (real hw) | 0.45 (VM)
-// payload.classification.flags      → [] (clean) | ['CV_TOO_HIGH_...'] (VM)
-// hash → BLAKE3 commitment you send to your server for validation
+// hash → BLAKE3 commitment for server-side validation
 ```
 
-**Self-hosted mode:** No API key. No account. No data leaves the client. Runs entirely in your infrastructure.
+**Self-hosted:** No API key, no account, no data leaves the client. Runs entirely in your infra.
 
-**Hosted API mode:** Zero server setup — pass an `apiKey` and the SDK handles challenge/verify automatically:
+**Hosted API:** Zero server setup — pass `apiKey` and the SDK handles challenge/verify:
 
 ```js
 const result = await pulse({ apiKey: 'sk_live_...' });
-// result.result.valid, result.result.score, result.result.confidence
 ```
 
 ---
 
-## The Problem With Every Other Approach
+## Why this exists
 
-Every bot detection system is, at its core, a database. Known bad IP ranges. Known headless browser fingerprints. Known datacenter ASNs. Known CAPTCHA-solving services.
+Bot detection is a database problem. Known bad IPs, known headless fingerprints, known datacenter ASNs. Attacker's job: don't be in the database. New cloud region? New headless runtime? New residential proxy? Database is stale.
 
-The attacker's job is simple: don't be in the database. The moment a new cloud region launches, a new headless runtime ships, or a new residential proxy network comes online, the database is stale.
+Pulse doesn't use a database.
 
-Pulse doesn't work that way.
-
-A VM's hypervisor clock is mathematically perfect — it cannot produce thermal noise because there is no thermal feedback loop in a virtual timer. Real silicon running under sustained load gets measurably noisier as electrons move through gates that are physically getting hotter. That relationship is a law of physics. It does not change when AWS launches a new instance type in 2027. It does not change when a new hypervisor ships. It cannot be patched.
+A VM's hypervisor clock is mathematically perfect. It has to be — there's no thermal feedback loop in a virtual timer. Real silicon under load gets noisier because electrons move through gates that are physically heating up. That's a law of physics. Doesn't matter what hypervisor ships next year.
 
 ---
 
-## The Two Layers
+## Two layers
 
-**Detection** answers: *Is this a VM?*
-Handled entirely by the heuristic engine. No signatures, no database. Five physical relationships, measured and cross-checked. If they're mutually coherent with what thermodynamics predicts, it's real hardware. If any of them contradict each other in ways physics wouldn't allow, something is being faked.
+**Detection** — *Is this a VM?*
+Five physical relationships, measured and cross-checked. If they're mutually coherent with what thermodynamics predicts, it's real. If any of them contradict each other in ways physics wouldn't allow, something's being faked. No signatures, no database.
 
-**Classification** answers: *Which VM is it?*
-Handled by the provider fingerprinter. Matches the timing autocorrelation profile against known hypervisor scheduler rhythms (KVM's 250ms quantum, Xen's 750ms credit scheduler, Hyper-V's 15.6ms quantum). This is the part that improves with more data — but it's not needed for detection. A brand-new hypervisor from a company that doesn't exist yet will still fail detection the moment it tries to present a mathematically flat clock.
+**Classification** — *Which VM?*
+Matches timing autocorrelation against known hypervisor scheduler rhythms (KVM 250ms quantum, Xen 750ms credit scheduler, Hyper-V 15.6ms). This part improves with data — but it's not needed for detection. A hypervisor that doesn't exist yet will still fail detection the moment it presents a flat clock.
 
 ---
 
-## The Five Physical Signals
+## The five signals
 
 ### 1. Entropy-Jitter Ratio
 
-The key signal. When a real CPU runs sustained compute, thermal throttling kicks in and timing jitter *increases* — the die gets hotter, the transistors switch slightly slower, and you can measure it.
+The key one. Real CPU under sustained compute → thermal throttling → timing jitter increases. Die gets hotter, transistors switch slower, you can measure it.
 
 ```
-hotQE / coldQE  ≥ 1.08  →  thermal feedback confirmed (real silicon)
-hotQE / coldQE  ≈ 1.00  →  clock is insensitive to guest thermal state (VM)
+hotQE / coldQE  ≥ 1.08  →  thermal feedback (real silicon)
+hotQE / coldQE  ≈ 1.00  →  clock ignores guest thermal state (VM)
 ```
 
-A KVM hypervisor maintains a synthetic clock that ticks at a constant rate regardless of what the guest OS is doing. Its entropy ratio across cold/load/hot phases is flat. On a KVM VM (12 vCPU / 480GB RAM / GH200 Grace Hopper) it measured 1.01. On a local GTX 1650 Super machine it measured 1.24.
+KVM hypervisor maintains a synthetic clock that ticks at a constant rate regardless of guest activity. On a KVM VM (12 vCPU / 480GB / GH200 Grace Hopper): EJR=1.01. On a local GTX 1650 Super: EJR=1.24.
 
-A software implementation cannot fake this without generating actual heat.
+Can't fake this without generating actual heat.
 
 ### 2. Hurst-Autocorrelation Coherence
 
-Genuine Brownian noise (what real hardware timing looks like) has a Hurst exponent near 0.5 and near-zero autocorrelation at all lags. These two are physically linked by the relationship `expected_AC = |2H - 1|`.
+Real Brownian noise → Hurst exponent near 0.5, near-zero autocorrelation at all lags. These are physically linked: `expected_AC = |2H - 1|`.
 
-If you measure H=0.5 but find high autocorrelation — or low H but low autocorrelation — the data was generated, not measured. A VM that tries to fake the Hurst Exponent without adjusting the autocorrelation profile, or vice versa, fails this check immediately.
+Measure H=0.5 but find high autocorrelation? Data was generated, not measured. A VM faking one without adjusting the other gets caught.
 
 ### 3. CV-Entropy Coherence
 
-High coefficient of variation (timing spread) must come from a genuinely spread-out distribution, which means high quantization entropy. A VM that inflates CV by adding synthetic outliers at fixed offsets — say, every 50th iteration triggers a steal-time burst — produces high CV but low entropy because 93% of samples still fall in two bins.
+High coefficient of variation should come from genuinely spread-out timing, which means high quantization entropy. VMs that inflate CV by adding synthetic outliers at fixed offsets produce high CV but low entropy — 93% of samples still land in two bins.
 
-From a KVM GH200 VM: CV=0.0829 (seems variable) but QE=1.27 bits (extreme clustering). Incoherent. On real hardware, CV=0.1494 → QE=3.59 bits. Coherent.
+KVM GH200: CV=0.0829 but QE=1.27 bits. Incoherent. Real hardware: CV=0.1494, QE=3.59 bits. Coherent.
 
-### 4. The Picket Fence Detector
+### 4. Picket Fence Detector
 
-Hypervisor scheduler quanta create periodic steal-time bursts. A KVM host running at ~5ms/iteration with a 250ms quantum will pause the guest every ~50 iterations. This shows up as elevated autocorrelation at lag-50 relative to lag-5. The autocorrelation profile looks like fence posts at regular intervals — hence the name.
+Hypervisor scheduler quanta create periodic steal-time bursts. KVM at ~5ms/iteration with a 250ms quantum pauses the guest every ~50 iterations. Shows up as elevated autocorrelation at lag-50.
 
 ```
-Real hardware:  lag-1 AC=0.07  lag-50 AC=0.03   (flat, no rhythm)
+Real hardware:  lag-1 AC=0.07  lag-50 AC=0.03   (flat)
 KVM VM:         lag-1 AC=0.67  lag-50 AC=0.71   (periodic steal-time)
 ```
 
-The dominant lag also lets the classifier estimate the scheduler quantum: `lag × 5ms/iter ≈ quantum`. This is how it identifies KVM (250ms), Xen (750ms), and Hyper-V (15.6ms) without any prior knowledge of the host.
+Dominant lag also identifies the hypervisor: `lag × 5ms/iter ≈ quantum`.
 
 ### 5. Skewness-Kurtosis Coherence
 
-Real hardware timing is right-skewed with positive kurtosis. OS preemptions create occasional large delays on the right tail, while the body of the distribution stays compact. A VM that adds synthetic spikes at fixed offsets tends to produce the wrong skew direction or an implausibly symmetric distribution.
+Real hardware timing is right-skewed with positive kurtosis — OS preemptions create occasional large delays on the right tail. VMs adding synthetic spikes at fixed offsets tend to produce wrong skew or implausibly symmetric distributions.
 
 ---
 
-## Benchmark Results
+## Benchmarks
 
-*12 trials × 200 iterations. Two real environments.*
+*12 trials × 200 iterations.*
 
-### Local Machine — GTX 1650 Super · i5-10400 · Win11 · 16GB DDR4
+### Local — GTX 1650 Super · i5-10400 · Win11 · 16GB DDR4
 
 ```
 Pulse Score  [████████████████████████████████░░░░░░░░] 79.8%
 ```
 
-| Metric | Value | Physical interpretation |
+| Metric | Value | What it means |
 |---|---|---|
-| Coefficient of Variation | 0.1494 | Spread from thermal noise + OS interrupts |
-| Hurst Exponent | 0.5505 | Near-Brownian — i.i.d. noise from independent sources |
-| Quantization Entropy | 3.59 bits | Timings genuinely spread across distribution |
-| Autocorr lag-1 | 0.0698 | Near-zero — no periodic forcing |
-| Autocorr lag-50 | 0.0312 | Flat at distance — no scheduler rhythm |
-| Entropy-Jitter Ratio | 1.24 | Entropy grew 24% from cold to hot — thermal feedback confirmed |
-| Thermal Pattern | sawtooth | Fan cycling, not hypervisor |
-| Outlier Rate | 2.25% | OS context switches — unpredictable, not periodic |
+| CV | 0.1494 | Spread from thermal noise + OS interrupts |
+| Hurst | 0.5505 | Near-Brownian, i.i.d. noise |
+| QE | 3.59 bits | Timings genuinely spread |
+| AC lag-1 | 0.0698 | No periodic forcing |
+| AC lag-50 | 0.0312 | No scheduler rhythm |
+| EJR | 1.24 | 24% entropy growth cold→hot |
+| Thermal | sawtooth | Fan cycling |
+| Outlier Rate | 2.25% | OS context switches |
 
-**Distribution:**
 ```
   3.60ms │██████                                  8
-  3.88ms │█████                                   7
   4.16ms │██████████████                         19
   4.44ms │██████████████████████                 30
   4.73ms │████████████████████████████████████   50   ← peak
   5.01ms │██████████████████████                 30
-  5.29ms │████████████████                       22
   5.57ms │█████████████                          18
-  5.85ms │██████                                  8
-  6.13ms │█                                       2
-  7.53ms │█                                       1    ← OS preemption
-  8.94ms │█                                       1
+  7.53ms │█                                       1   ← OS preemption
 ```
 
-Normal bell curve, right-tailed from OS preemptions. Exactly what Brownian timing noise looks like.
+Normal bell curve, right-tailed from preemptions.
 
 ---
 
-### Remote VM — KVM · 12 vCPU · 480GB RAM · NVIDIA GH200 Grace Hopper · Ubuntu 22.04
+### Remote VM — KVM · 12 vCPU · 480GB · GH200 Grace Hopper · Ubuntu 22.04
 
 ```
 Pulse Score  [██████████████████░░░░░░░░░░░░░░░░░░░░░░] 45.0%
 ```
 
-| Metric | Value | Physical interpretation |
+| Metric | Value | What it means |
 |---|---|---|
-| Coefficient of Variation | 0.0829 | Artificially consistent — hypervisor flattens variance |
-| Hurst Exponent | 0.0271 | Anti-persistent — caused by timer quantization artifacts |
-| Quantization Entropy | 1.27 bits | 93% of samples on two values — not a distribution |
-| Autocorr lag-1 | 0.666 | Periodic forcing — steal-time burst every ~50 samples |
-| Autocorr lag-50 | 0.710 | Still elevated at lag-50 — confirms periodic scheduler |
-| Entropy-Jitter Ratio | 1.01 | Flat — hypervisor clock has no thermal feedback |
-| Thermal Pattern | sawtooth (synthetic) | Produced by scheduler bursts, not temperature |
-| Outlier Rate | 6.00% | Exactly 6% — the steal-time bursts are deterministic |
+| CV | 0.0829 | Hypervisor flattens variance |
+| Hurst | 0.0271 | Anti-persistent, timer quantization |
+| QE | 1.27 bits | 93% of samples on two values |
+| AC lag-1 | 0.666 | Periodic steal-time |
+| AC lag-50 | 0.710 | Confirms scheduler rhythm |
+| EJR | 1.01 | Flat — no thermal feedback |
+| Thermal | sawtooth (synthetic) | Scheduler bursts, not temperature |
+| Outlier Rate | 6.00% | Deterministic steal-time |
 
-**Distribution:**
 ```
-  5.00ms │████████████████████████████████████  123   ← 61% of all samples
-  5.11ms │███████████████████                    65   ← 32% of all samples
+  5.00ms │████████████████████████████████████  123   ← 61%
+  5.11ms │███████████████████                    65   ← 32%
   5.22ms │                                        0
-  ...     │                                        0   ← impossible values
+  ...     │                                        0   ← impossible gap
   6.72ms │█                                       2
   6.83ms │█                                       4   ← steal-time bursts
-  7.05ms │█                                       3
 ```
 
-This is the "Picket Fence" — 93% of samples at exactly two values. Nothing in between. A continuous physical process cannot produce this. A synthetic clock rounding to its host tick resolution can.
+93% at exactly two values. Nothing in between. A continuous physical process can't produce this.
 
-**Heuristic Engine Output:**
 ```
-ENTROPY_FLAT_UNDER_LOAD      EJR=1.01 (expected ≥1.08 for real hardware)   penalty -0.10
-PICKET_FENCE_DETECTED        lag-50 AC=0.71 > baseline 0.08                penalty -0.08
-HURST_AUTOCORR_INCOHERENT    H=0.027 vs expected AC=|2H-1|=0.946           penalty -0.12
-CV_ENTROPY_INCOHERENT        CV=0.083 → expected QE≈2.83, actual QE=1.27   penalty -0.10
+ENTROPY_FLAT_UNDER_LOAD      EJR=1.01 (expected ≥1.08)              -0.10
+PICKET_FENCE_DETECTED        lag-50 AC=0.71 > baseline 0.08         -0.08
+HURST_AUTOCORR_INCOHERENT    H=0.027 vs expected AC=0.946           -0.12
+CV_ENTROPY_INCOHERENT        CV=0.083 → expected QE≈2.83, got 1.27  -0.10
 ```
 
-Each of those four flags is a different physical law being violated. Spoofing one is straightforward. Spoofing all four simultaneously while keeping them mutually consistent with each other is not.
+Four different physical laws violated simultaneously. Spoofing one is easy. Spoofing all four while keeping them consistent with each other is a different problem.
 
 ---
 
-## Adaptive Early Exit
+## Adaptive early exit
 
-The probe doesn't always need 200 iterations. It checks signal confidence every 25 and exits when the verdict is already decisive:
+Doesn't always need 200 iterations. Checks confidence every 25, exits when the verdict is decisive:
 
 ```
-Environment         Iters used   Wall time   Speedup
-────────────────────────────────────────────────────
-KVM (obvious)           50         ~0.9s       75%
-VMware ESXi             75         ~1.4s       60%
-Physical desktop       ~120        ~2.1s       40%
-Ambiguous              200         ~3.5s        —
+Environment         Iters   Time    Speedup
+──────────────────────────────────────────
+KVM (obvious)           50   ~0.9s    75%
+VMware ESXi             75   ~1.4s    60%
+Physical desktop       ~120  ~2.1s    40%
+Ambiguous              200   ~3.5s     —
 ```
 
-The GH200 VM hit the exit condition at iteration 50. 480GB of RAM and a Grace Hopper Superchip cannot change the fact that the hypervisor clock is mathematically perfect. The signal was conclusive within the first batch.
+The GH200 VM — 480GB RAM, Grace Hopper Superchip — hit the exit at iteration 50. Doesn't matter. The hypervisor clock is still mathematically perfect.
 
 ---
 
-## Installation
+## Install
 
 ```bash
 npm install @svrnsec/pulse
 ```
 
-Node.js ≥ 18. The WASM binary is compiled from Rust and bundled — no separate `.wasm` file to host.
+Node 18+. WASM binary compiled from Rust and bundled. No separate `.wasm` file to host. No phone home, no external service.
 
-The package is self-contained. It does not phone home. It does not contact any external service. Everything runs inside your infrastructure.
-
-To build from source (requires [Rust](https://rustup.rs) and [wasm-pack](https://rustwasm.github.io/wasm-pack/)):
+Build from source (needs [Rust](https://rustup.rs) + [wasm-pack](https://rustwasm.github.io/wasm-pack/)):
 
 ```bash
 git clone https://github.com/ayronny14-alt/Svrn-Pulse-Security
 cd Svrn-Pulse-Security
-npm install
-npm run build
+npm install && npm run build
 ```
 
 ---
 
 ## Usage
 
-### Client side
+### Client
 
 ```js
 import { pulse } from '@svrnsec/pulse';
 
-// Get a nonce from your server (prevents replay attacks)
 const { nonce } = await fetch('/api/pulse/challenge').then(r => r.json());
 
-// Run the probe — adaptive, exits early when signal is decisive
 const { payload, hash } = await pulse({
   nonce,
   onProgress: (stage, meta) => {
     if (stage === 'entropy_batch') {
-      // Live signal during probe — stream to a progress bar
-      // meta: { pct, vmConf, hwConf, earlyVerdict, etaMs }
       console.log(`${meta.pct}% — ${meta.earlyVerdict ?? 'measuring...'}`);
     }
   },
 });
 
-// Send commitment to your server
 const result = await fetch('/api/pulse/verify', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -277,7 +254,7 @@ const result = await fetch('/api/pulse/verify', {
 }).then(r => r.json());
 ```
 
-### High-level `Fingerprint` class
+### Fingerprint class
 
 ```js
 import { Fingerprint } from '@svrnsec/pulse';
@@ -291,30 +268,28 @@ fp.tier               // 'high' | 'medium' | 'low' | 'uncertain'
 fp.profile            // 'analog-fog' | 'picket-fence' | 'burst-scheduler' | ...
 fp.providerId         // 'kvm-digitalocean' | 'nitro-aws' | 'physical' | ...
 fp.providerLabel      // 'DigitalOcean Droplet (KVM)'
-fp.schedulerQuantumMs // 250 — estimated from autocorrelation peak lag
-fp.entropyJitterRatio // 1.24 — hotQE / coldQE
+fp.schedulerQuantumMs // 250
+fp.entropyJitterRatio // 1.24
 fp.topFlag            // 'PICKET_FENCE_DETECTED'
-fp.findings           // full heuristic engine report
-fp.physicalEvidence   // confirmed physical properties (bonuses)
+fp.findings           // full heuristic report
+fp.physicalEvidence   // confirmed physical properties
 
-fp.hardwareId()       // stable 32-char hex ID — BLAKE3(GPU + audio signals), 128-bit collision resistance
-fp.metrics()          // flat object of all numeric metrics for logging
-fp.toCommitment()     // { payload, hash } — send to server
+fp.hardwareId()       // stable 32-char hex — BLAKE3(GPU + audio), 128-bit
+fp.metrics()          // flat object for logging
+fp.toCommitment()     // { payload, hash }
 ```
 
-### Server side
+### Server
 
 ```js
 import { validateProof, generateNonce } from '@svrnsec/pulse/validator';
 
-// Challenge endpoint — runs on your server, not ours
 app.get('/api/pulse/challenge', async (req, res) => {
   const nonce = generateNonce();
   await redis.set(`pulse:${nonce}`, '1', 'EX', 300);
   res.json({ nonce });
 });
 
-// Verify endpoint
 app.post('/api/pulse/verify', async (req, res) => {
   const result = await validateProof(req.body.payload, req.body.hash, {
     minJitterScore: 0.55,
@@ -339,7 +314,7 @@ const pulse = createPulseMiddleware({
 });
 
 app.get('/api/pulse/challenge', pulse.challenge);
-app.post('/checkout', pulse.verify, handler); // req.pulse injected
+app.post('/checkout', pulse.verify, handler);
 ```
 
 ### Next.js App Router
@@ -380,7 +355,7 @@ function Checkout() {
 
 ### TypeScript
 
-Full declarations shipped in `index.d.ts`. Every interface, every callback, every return type:
+Full declarations in `index.d.ts`:
 
 ```ts
 import { pulse, Fingerprint } from '@svrnsec/pulse';
@@ -389,9 +364,6 @@ import type {
   ProgressMeta, PulseStage,
   ValidationResult, FingerprintReport,
 } from '@svrnsec/pulse';
-
-const fp = await Fingerprint.collect({ nonce });
-// fp is fully typed — all properties, methods, and nested objects
 ```
 
 ---
@@ -401,13 +373,13 @@ const fp = await Fingerprint.collect({ nonce });
 ```js
 {
   valid:      true,
-  score:      0.8215,          // heuristic-adjusted score
-  confidence: 'high',          // 'high' | 'medium' | 'low' | 'rejected'
-  reasons:    [],              // populated when valid: false
-  riskFlags:  [],              // non-blocking signals worth logging
+  score:      0.8215,
+  confidence: 'high',       // 'high' | 'medium' | 'low' | 'rejected'
+  reasons:    [],
+  riskFlags:  [],
   meta: {
     receivedAt:     1742686350535,
-    proofAge:       2841,      // ms since probe ran
+    proofAge:       2841,
     jitterScore:    0.7983,
     canvasRenderer: 'NVIDIA GeForce GTX 1650 Super/PCIe/SSE2',
     bioActivity:    true,
@@ -415,60 +387,35 @@ const fp = await Fingerprint.collect({ nonce });
 }
 ```
 
-**Score thresholds:**
-
 | Score | Confidence | Meaning |
 |---|---|---|
 | ≥ 0.75 | high | Real consumer hardware |
-| 0.55 – 0.75 | medium | Likely real, some signals ambiguous |
+| 0.55 – 0.75 | medium | Likely real, some ambiguous signals |
 | 0.35 – 0.55 | low | Borderline — VM, Chromebook, virtual display |
 | < 0.35 | rejected | Strong VM/AI indicators |
 
 ---
 
-## Detection capabilities
+## What it catches
 
-| Scenario | Result | Primary signal |
+| Scenario | Result | Why |
 |---|---|---|
-| Cloud VM (AWS, GCP, Azure, DO) | Blocked | EJR flat + quantized ticks + picket fence |
-| Headless Chrome / Puppeteer | Blocked | SwiftShader renderer + no bio activity |
-| AI inference endpoint | Blocked | VM timing profile + zero bio signals |
-| Proof replay attack | Blocked | Nonce consumed atomically on first use |
-| Payload tampering | Blocked | BLAKE3 hash fails immediately |
-| Metric spoofing (one signal) | Blocked | Cross-metric coherence check |
-| Metric spoofing (all signals) | Very hard | 5 physically-linked relationships must be jointly coherent |
-| Hardware you've never seen before | Blocked | Physics is the check, not a database |
-| GPU passthrough VMs | Partial | Canvas check varies; timing is primary |
+| Cloud VM (AWS, GCP, Azure, DO) | Blocked | Flat EJR + quantized ticks + picket fence |
+| Headless Chrome / Puppeteer | Blocked | SwiftShader renderer + zero bio |
+| AI inference endpoint | Blocked | VM timing + zero bio |
+| Proof replay | Blocked | Nonce consumed on first use |
+| Payload tamper | Blocked | BLAKE3 hash breaks |
+| Single-signal spoofing | Blocked | Cross-metric coherence |
+| All-signal spoofing | Very hard | 5 physically-linked relationships |
+| Unknown hardware | Blocked | Physics is the check |
+| GPU passthrough VM | Partial | Canvas varies; timing is primary |
 | Remote desktop (real machine) | Pass | Timing is real; bio may be weak |
 
 ---
 
-## The Registry — Classification, Not Detection
+## TrustScore
 
-The `src/registry/serializer.js` module stores signatures for known provider environments. It is used for the **label**, not the **verdict**.
-
-If the heuristic engine says "this is a VM," the registry says "specifically, this is a DigitalOcean Droplet running KVM with a 5ms scheduler quantum." If the registry has never seen this particular hypervisor before, it returns `profile: 'generic-vm'` — but the heuristic engine already caught it.
-
-You can extend the registry with a signature collected from any new environment:
-
-```js
-import { serializeSignature, KNOWN_PROFILES } from '@svrnsec/pulse/registry';
-
-// After collecting a Fingerprint on the target machine:
-const sig = serializeSignature(fp, { name: 'AWS r7g.xlarge (Graviton3)', date: '2025-01' });
-// sig.id → deterministic 'sig_abc123...'
-// Buckets continuous metrics for privacy — not reversible to raw values
-```
-
-The detection engine doesn't need updates when new hardware ships. The registry benefits from them for labelling accuracy.
-
----
-
----
-
-## TrustScore — Unified 0–100 Human Score
-
-The TrustScore engine converts all physical signals into a single integer that security teams can threshold, dashboard, and alert on.
+Converts all signals into a single 0–100 integer.
 
 ```js
 import { computeTrustScore, formatTrustScore } from '@svrnsec/pulse/trust';
@@ -480,121 +427,98 @@ console.log(formatTrustScore(ts));
 // → "TrustScore 87/100  B · Verified  [physics:91% enf:80% gpu:100% dram:87% bio:70%]"
 ```
 
-**Signal weights:** Physics layer 40pts · ENF 20pts · GPU 15pts · DRAM 15pts · Bio/LLM 10pts
+**Weights:** Physics 40 · ENF 20 · GPU 15 · DRAM 15 · Bio/LLM 10
 
-**Hard floors** that bonus points cannot override:
+**Hard caps** (bonus points can't override these):
 
-| Condition | Cap | Why |
+| Condition | Cap | |
 |---|---|---|
-| EJR forgery detected | 20 | Physics law violated |
-| Software GPU renderer | 45 | Likely VM/container |
+| EJR forgery | 20 | Physics law violated |
+| Software GPU | 45 | Likely VM/container |
 | LLM agent conf > 0.85 | 30 | AI-driven session |
-| No bio + no ENF | 55 | Cannot confirm human on real device |
+| No bio + no ENF | 55 | Can't confirm human on real device |
 
 ---
 
-## Proof-of-Idle — Defeating Click Farms at the Physics Layer
+## Proof-of-Idle
 
-Click farms run 1,000 real phones at sustained maximum throughput. Browser fingerprinting cannot catch them — they ARE real devices.
+Click farms run thousands of real phones at max throughput. Fingerprinting can't catch them — the devices are real.
 
-The physics: a real device between interactions cools via Newton's Law of Cooling — a smooth exponential variance decay. A farm script pausing to fake idle drops CPU load from 100% to 0% instantly, producing a step function in the timing variance. You cannot fake a cooling curve faster than real time.
+But: a real device between interactions cools via Newton's Law — smooth exponential variance decay. A farm script pausing to fake idle drops CPU 100%→0% instantly. Step function in timing variance. Can't fake a cooling curve faster than real time.
 
 ```js
 import { createIdleMonitor } from '@svrnsec/pulse/idle';
 
-// Browser — hooks visibilitychange and blur/focus automatically
 const monitor = createIdleMonitor();
 monitor.start();
 
-// When user triggers an engagement action:
+// On engagement:
 const idleProof = monitor.getProof(); // null if device never genuinely rested
-
-// Node.js / React Native — manual control
-monitor.declareIdle();
-monitor.declareActive();
 ```
-
-**Thermal transition taxonomy:**
 
 | Label | Meaning | Farm? |
 |---|---|---|
-| `hot_to_cold` | Smooth exponential variance decay | No — genuine cooling |
-| `cold` | Device already at rest temperature | No — genuine idle |
-| `cooling` | Mild ongoing decay | No |
-| `step_function` | >75% variance drop in first interval | Yes — script paused |
-| `sustained_hot` | No cooling at all during idle period | Yes — constant load |
+| `hot_to_cold` | Smooth exponential decay | No |
+| `cold` | Already at rest temp | No |
+| `step_function` | >75% variance drop in first interval | Yes |
+| `sustained_hot` | No cooling at all during idle | Yes |
 
-**TrustScore impact:** `hot_to_cold` → +8pts bonus. `step_function` → hard cap 65. `sustained_hot` → hard cap 60.
-
-The hash chain (`SHA-256(prevHash ‖ ts ‖ meanMs ‖ variance)`) proves samples were taken in sequence at real intervals. N nodes at 30-second spacing = (N−1)×30s minimum elapsed time — cannot be back-filled faster than real time.
+Hash chain (`SHA-256(prevHash ‖ ts ‖ meanMs ‖ variance)`) proves samples were taken in sequence. N nodes at 30s spacing = (N-1)×30s minimum elapsed — can't backfill faster than real time.
 
 ---
 
-## Population Entropy — Sybil Detection at Cohort Level
+## Population Entropy
 
-One fake account is hard to detect. A warehouse of 1,000 phones running the same script is statistically impossible to hide.
+One fake account is hard to spot. A warehouse of 1,000 phones running the same script is statistically impossible to hide.
 
 ```js
 import { analysePopulation } from '@svrnsec/pulse/population';
 
 const verdict = analysePopulation(tokenCohort);
-// → { authentic: false, sybilScore: 84, flags: ['TIMESTAMP_RHYTHM', 'THERMAL_HOMOGENEOUS'], ... }
+// → { authentic: false, sybilScore: 84, flags: ['TIMESTAMP_RHYTHM', 'THERMAL_HOMOGENEOUS'] }
 ```
 
-Five independent statistical tests on a cohort of engagement tokens:
+Five tests on a cohort:
 
-| Test | What it catches | Farm signal |
-|---|---|---|
-| Timestamp rhythm | Lag-1/lag-2 autocorrelation of arrival times | Farms dispatch in clock-timed batches |
-| Entropy dispersion | CV of physics scores across cohort | Cloned VMs are too similar (CV < 0.04) |
-| Thermal diversity | Shannon entropy of transition labels | 1,000 phones → same thermal state |
-| Idle plausibility | Clustering of idle durations | Scripts always pause for the same duration |
-| ENF phase coherence | Variance of grid frequency deviations | Co-located devices share the same circuit |
+| Test | What it catches |
+|---|---|
+| Timestamp rhythm | Clock-timed dispatch batches |
+| Entropy dispersion | Cloned VMs too similar (CV < 0.04) |
+| Thermal diversity | 1,000 phones, same thermal state |
+| Idle plausibility | Scripts always pause for same duration |
+| ENF phase coherence | Co-located devices share same circuit |
 
-`sybilScore < 40 = authentic cohort`. Coordinated farms score 80+.
+`sybilScore < 40 = authentic`. Farms hit 80+.
 
 ---
 
-## Engagement Tokens — 30-Second Physics-Backed Proof
+## Engagement Tokens
 
-A short-lived cryptographic token that proves a specific engagement event originated from a real human on real hardware that had genuinely rested between interactions.
+30-second HMAC-SHA256 token proving a specific interaction came from real hardware that genuinely rested between events.
 
 ```js
 import { createEngagementToken, verifyEngagementToken } from '@svrnsec/pulse/engage';
 
-// Client — after the interaction
 const { compact } = createEngagementToken({
   pulseResult,
   idleProof: monitor.getProof(),
   interaction: { type: 'click', ts: Date.now(), motorConsistency: 0.82 },
   secret: process.env.PULSE_SECRET,
 });
-// Attach to API call: X-Pulse-Token: <compact>
+// Header: X-Pulse-Token: <compact>
 
-// Server — before crediting any engagement metric
 const result = await verifyEngagementToken(compact, process.env.PULSE_SECRET, {
   checkNonce: (n) => redis.del(`pulse:nonce:${n}`).then(d => d === 1),
 });
-// result.valid, result.riskSignals, result.idleWarnings
 ```
 
-**What the token proves:**
-
-1. Real hardware — DRAM refresh present, ENF grid signal detected
-2. Genuine idle — Hash-chained thermal measurements spanning ≥ 45s
-3. Physical cooling — Variance decay was smooth, not a step function
-4. Fresh interaction — 30-second TTL eliminates token brokers
-5. Tamper-evident — HMAC-SHA256 over all fraud-relevant fields
-
-HMAC signs: `v|n|iat|exp|idle.chain|idle.dMs|hw.ent|evt.t|evt.ts`
-
-Advisory fields (thermal label, cooling monotonicity) are in the token body for risk scoring but deliberately excluded from the HMAC — changing them can't gain access credit without breaking the signature.
+What the token binds together: real hardware (DRAM + ENF), genuine idle (hash-chained thermal measurements ≥45s), physical cooling (smooth decay, not step function), fresh interaction (30s TTL), tamper-evident (HMAC over all fraud-relevant fields).
 
 ---
 
-## Authenticity Audit — The $44 Billion Question
+## Authenticity Audit
 
-Elon paid $44 billion arguing about what percentage of Twitter's users were real humans. Nobody had a physics-layer tool to measure it. This is that tool.
+Statistically estimates what percentage of a user cohort is human.
 
 ```js
 import { authenticityAudit } from '@svrnsec/pulse/audit';
@@ -606,131 +530,60 @@ const report = authenticityAudit(tokenCohort, { confidenceLevel: 0.95 });
 {
   cohortSize:          10000,
   estimatedHumanPct:   73.4,
-  confidenceInterval:  [69.1, 77.8],   // 95% bootstrap CI
+  confidenceInterval:  [69.1, 77.8],
   grade:               'HIGH_FRAUD',
   botClusterCount:     5,
   botClusters: [
     {
-      id:          'farm_a3f20c81',
-      size:         847,
-      sybilScore:   94,
+      id:        'farm_a3f20c81',
+      size:       847,
+      sybilScore: 94,
       signature: {
         enfRegion:    'americas',
-        dramVerdict:  'dram',
         thermalLabel: 'sustained_hot',
-        meanEnfDev:   0.0231,          // Hz — localizes to substation/building
-        meanIdleMs:   57200,           // script sleeps for exactly 57s
+        meanIdleMs:   57200,        // script sleeps exactly 57s
       },
       topSignals: ['timestamp_rhythm', 'thermal_diversity'],
     },
   ],
-  recommendation: 'CRITICAL: 5 bot farm clusters account for a majority of traffic...',
 }
 ```
 
-**Method:** Tokens are clustered by hardware signature (ENF deviation bucket × DRAM verdict × thermal label × 10-minute time bucket). Organic users scatter across all dimensions. A farm in one building, running the same script, on the same hardware generation collapses into one tight cluster. Each cluster is scored with Population Entropy. A non-parametric bootstrap produces the confidence interval.
+Tokens clustered by hardware signature (ENF × DRAM × thermal × time bucket). Organic users scatter. A farm in one building on the same hardware collapses into one tight cluster. Bootstrap CI on the human-rate estimate.
 
-**Typical values:**
-
-| Scenario | estimatedHumanPct |
+| Scenario | humanPct |
 |---|---|
 | Organic product feed | 92–97% |
-| Incentivised engagement campaign | 55–75% |
-| Coordinated click farm attack | 8–35% |
-
----
-
-## HMAC-Signed Challenge Protocol
-
-Plain random nonces prevent replay attacks but not forged challenges. The challenge module adds server-signed HMAC authentication:
-
-```js
-import { createChallenge, verifyChallenge, generateSecret } from '@svrnsec/pulse/challenge';
-
-// One-time setup: generate a 256-bit secret
-const secret = generateSecret(); // store in env vars
-
-// Challenge endpoint
-app.get('/api/challenge', (req, res) => {
-  const challenge = createChallenge(secret);
-  await redis.set(`pulse:${challenge.nonce}`, '1', 'EX', 300);
-  res.json(challenge);
-});
-
-// Verify endpoint — validates HMAC before processing the proof
-app.post('/api/verify', async (req, res) => {
-  const { valid, reason } = await verifyChallenge(req.body.challenge, secret, {
-    checkNonce: async (n) => (await redis.del(`pulse:${n}`)) === 1,
-  });
-  if (!valid) return res.status(400).json({ error: reason });
-  // ... proceed with validateProof
-});
-```
-
-The HMAC covers `nonce|issuedAt|expiresAt` — altering any field breaks the signature. Timing-safe comparison prevents side-channel attacks on the signature verification.
+| Incentivised campaign | 55–75% |
+| Click farm attack | 8–35% |
 
 ---
 
 ## Coordinated Behavior Detection
 
-Detects coordinated inauthentic behavior across a cohort of engagement tokens using five independent analysis layers:
-
 ```js
 import { detectCoordinatedBehavior } from '@svrnsec/pulse/coordination';
 
 const result = detectCoordinatedBehavior(tokenCohort);
-// result.clusters — detected bot farm clusters with similarity scores
-// result.coordinationScore — 0-100, higher = more coordinated
+// result.clusters, result.coordinationScore (0-100)
 ```
 
-**Analysis layers:**
-- **Temporal clustering** — Poisson test on arrival time distributions
-- **Signal fingerprint collision** — Entropy band / thermal label / motor band hash matching
-- **Drift fingerprinting** — Clock drift rate convergence across devices
-- **Mutual information matrix** — Louvain-lite community detection
-- **Entropy velocity** — Shannon entropy growth rate vs traffic growth
+Five layers: Poisson test on arrival times, signal fingerprint collision, clock drift convergence, Louvain-lite community detection on mutual information, entropy velocity vs traffic growth.
 
 ---
 
 ## LLM Agent Detection
 
-Detects AI-controlled headless browsers (AutoGPT, Playwright+LLM, browser agents) through behavioral biometrics:
+Catches AI-controlled browsers (AutoGPT, Playwright+LLM, browser agents) through behavioral biometrics:
 
 ```js
 import { detectLlmAgent } from '@svrnsec/pulse/llm';
 
 const result = detectLlmAgent(bioSnapshot);
-// result.aiConf     — 0-1 confidence this is an AI agent
-// result.humanConf  — 0-1 confidence this is a human
-// result.verdict    — 'human' | 'ai_agent' | 'ambiguous'
+// result.verdict → 'human' | 'ai_agent' | 'ambiguous'
 ```
 
-**Six behavioral signals:**
-1. Think-time pattern — LLMs produce characteristic pause distributions
-2. Mouse path smoothness — Bezier-interpolated paths vs. natural micro-tremor
-3. Keystroke correction rate — Humans make typos; LLMs don't backspace
-4. Physiological tremor — 8-12 Hz micro-oscillation present in all human motor control
-5. Inter-event gap distribution — LLM response latencies cluster differently than human reaction times
-6. Motor consistency — AI agents maintain unnaturally consistent click precision
-
-TrustScore hard cap: AI agent confidence > 0.85 caps the score at 30.
-
----
-
-## Refraction — Cross-Environment Timer Calibration
-
-Different environments have different timer resolutions. Refraction automatically calibrates scoring thresholds:
-
-```js
-import { calibrate, getProfile } from '@svrnsec/pulse/refraction';
-
-const profile = await calibrate();
-// profile.env — 'browser' | 'node' | 'deno' | 'worker'
-// profile.grain — timer resolution in ms
-// profile.thresholds — adjusted scoring thresholds for this environment
-```
-
-The calibration profile adjusts all downstream analysis so a 100us-clamped Brave browser and a nanosecond-precision Node.js process are scored against appropriate baselines.
+Six signals: think-time distributions, mouse path smoothness (Bezier vs micro-tremor), keystroke correction rate, 8-12Hz physiological tremor, inter-event gap clustering, motor consistency.
 
 ---
 
@@ -741,32 +594,14 @@ npm test
 ```
 
 ```
-  integration.test.js    43 tests  — core engine, provider classifier, commitment, registry
-  stress.test.js         92 tests  — adversarial: KVM, VMware, Docker, LLM agents,
-                                     Gaussian noise injection, synthetic thermal drift,
-                                     score separation (real min vs VM max)
-  engagement.test.js     45 tests  — IdleAttestation state machine, thermal classification,
-                                     Population Entropy (all 5 tests), Engagement Token
-                                     creation/verification/replay/tamper, risk signals
-  audit.test.js          18 tests  — Authenticity Audit: organic vs farm cohorts, CI
-                                     properties, multi-farm fingerprinting, grade thresholds
+integration.test.js    43 tests  — core engine, provider classifier, commitment
+stress.test.js         92 tests  — adversarial: KVM, VMware, Docker, LLM agents,
+                                   noise injection, synthetic thermal drift
+engagement.test.js     45 tests  — idle attestation, population entropy, tokens
+audit.test.js          18 tests  — authenticity audit, multi-farm fingerprinting
 
-  Test Suites: 4 passed
-  Tests:       158 passed, 0 failed
-  Time:        ~1.0s
+4 suites, 158 tests, ~1.0s
 ```
-
----
-
-## Demo
-
-```bash
-node demo/node-demo.js
-```
-
-Simulates real hardware (Box-Muller Gaussian noise — no periodic components, no artificial autocorrelation) and VM timing profiles (0.1ms quantization grid + steal-time bursts every 50 iterations). Runs both through the full analysis and commitment pipeline. No WASM needed.
-
-Open `demo/web/index.html` in a browser to see the animated probe running on your actual machine.
 
 ---
 
@@ -775,106 +610,86 @@ Open `demo/web/index.html` in a browser to see the animated probe running on you
 ```
 sovereign-pulse/
 ├── src/
-│   ├── index.js                    pulse() — main entry point
-│   ├── fingerprint.js              Fingerprint class (high-level API)
+│   ├── index.js                    pulse() entry point
+│   ├── fingerprint.js              Fingerprint class
+│   ├── errors.js                   Error types
 │   ├── collector/
 │   │   ├── entropy.js              WASM bridge + phased/adaptive routing
-│   │   ├── adaptive.js             Adaptive early-exit engine
-│   │   ├── bio.js                  Mouse/keyboard interference coefficient
-│   │   ├── canvas.js               WebGL/2D canvas fingerprint
-│   │   ├── gpu.js                  WebGPU thermal growth probe
-│   │   ├── dram.js                 DRAM refresh cycle detector
-│   │   ├── enf.js                  Electrical Network Frequency probe
-│   │   ├── sabTimer.js             Sub-millisecond SAB timer
-│   │   └── idleAttestation.js      Proof-of-Idle — thermal hash chain (v0.5.0)
+│   │   ├── adaptive.js             Early-exit engine
+│   │   ├── bio.js                  Mouse/keyboard interference
+│   │   ├── canvas.js               WebGL/2D fingerprint
+│   │   ├── gpu.js                  WebGPU thermal probe
+│   │   ├── dram.js                 DRAM refresh detector
+│   │   ├── enf.js                  Electrical Network Frequency
+│   │   ├── sabTimer.js             Sub-ms SAB timer
+│   │   └── idleAttestation.js      Proof-of-Idle hash chain
 │   ├── analysis/
 │   │   ├── jitter.js               Statistical classifier (6 components)
-│   │   ├── heuristic.js            Cross-metric physics coherence engine
-│   │   ├── provider.js             Hypervisor/cloud provider classifier
-│   │   ├── audio.js                AudioContext callback jitter
-│   │   ├── llm.js                  LLM agent behavioural detector
-│   │   ├── trustScore.js           Unified 0–100 TrustScore engine (v0.4.0)
-│   │   ├── populationEntropy.js    Sybil detection — 5 cohort-level tests (v0.5.0)
-│   │   └── authenticityAudit.js    $44B question — humanPct + CI (v0.6.0)
+│   │   ├── heuristic.js            Cross-metric coherence engine
+│   │   ├── provider.js             Hypervisor classifier
+│   │   ├── audio.js                AudioContext jitter
+│   │   ├── llm.js                  LLM agent detector
+│   │   ├── trustScore.js           TrustScore engine
+│   │   ├── populationEntropy.js    Sybil detection
+│   │   ├── authenticityAudit.js    Cohort human-rate estimation
+│   │   ├── coordinatedBehavior.js  CIB detection
+│   │   └── refraction.js           Timer calibration
 │   ├── middleware/
-│   │   ├── express.js              Express/Fastify/Hono drop-in
-│   │   └── next.js                 Next.js App Router HOC
+│   │   ├── express.js              Express/Fastify/Hono
+│   │   └── next.js                 Next.js App Router
 │   ├── integrations/
-│   │   ├── react.js                usePulse() hook
-│   │   └── react-native.js         Expo accelerometer + thermal bridge
+│   │   ├── react.js                usePulse()
+│   │   └── react-native.js         Expo accelerometer + thermal
 │   ├── proof/
-│   │   ├── fingerprint.js          BLAKE3 commitment builder
-│   │   ├── validator.js            Server-side proof verifier
+│   │   ├── fingerprint.js          BLAKE3 commitment
+│   │   ├── validator.js            Server-side verifier
 │   │   ├── challenge.js            HMAC challenge/response
-│   │   └── engagementToken.js      30s physics-backed engagement token (v0.5.0)
+│   │   └── engagementToken.js      30s engagement token
 │   └── registry/
-│       └── serializer.js           Provider signature serializer + matcher
+│       └── serializer.js           Provider signature matcher
 ├── crates/pulse-core/              Rust/WASM entropy probe
-├── index.d.ts                      Full TypeScript declarations
-├── demo/
-│   ├── web/index.html              Standalone browser demo
-│   ├── node-demo.js                CLI demo (no WASM required)
-│   ├── benchmark.js                Generates numbers in this README
-│   └── perf.js                     Pipeline overhead benchmarks
-└── test/
-    ├── integration.test.js         43 tests  — core engine
-    ├── stress.test.js              92 tests  — adversarial attack suite
-    ├── engagement.test.js          45 tests  — idle / population / tokens
-    └── audit.test.js               18 tests  — authenticity audit
+├── server/                         Optional hosted API (Docker + Redis)
+├── index.d.ts                      TypeScript declarations
+├── demo/                           Browser + CLI demos
+└── test/                           158 tests
 ```
 
 ---
 
 ## Privacy
 
-Nothing leaves the browser except a ~1.6KB statistical summary:
+Nothing leaves the browser except a ~1.6KB statistical summary. Timing arrays and GPU buffers are BLAKE3-hashed — only hashes transmitted. Mouse coordinates never stored, only timing deltas. Keystrokes reduced to dwell/flight times, labels discarded.
 
-- Timing arrays → BLAKE3 hashed, only hash transmitted
-- GPU pixel buffers → BLAKE3 hashed, only hash transmitted
-- Mouse coordinates → never stored, only timing deltas used
-- Keystrokes → only dwell/flight times, key labels discarded immediately
-
-The server receives enough to verify the proof. Not enough to reconstruct any original signal. Not enough to re-identify a user across sessions.
-
-`hardwareId()` is a 128-bit BLAKE3 hash of GPU renderer string + audio sample rate. Stable per physical device, not reversible, not cross-origin linkable.
+`hardwareId()` is a 128-bit BLAKE3 hash of GPU renderer + audio sample rate. Stable per device, not reversible, not cross-origin linkable.
 
 ---
 
 ## Limitations
 
-- The probe runs for 0.9–3.5 seconds. Best suited for deliberate actions (login, checkout, form submit) not page load.
-- Mobile browsers cap `performance.now()` to 1ms resolution. Signal quality is reduced; the classifier adjusts but scores trend lower.
-- GPU passthrough VMs pass the canvas check. Timing is the primary discriminator in that case.
-- This is one signal among many. High-stakes applications should layer it with behavioral and network signals.
-- The heuristic engine catches unknown VMs via physics. The provider classifier labels them by scheduler signature. If a new hypervisor ships with an unusual quantum, it will be detected and flagged as `generic-vm` until the registry is updated.
+- Probe takes 0.9–3.5s. Best for deliberate actions (login, checkout) not page load.
+- Mobile browsers cap `performance.now()` to 1ms. Signal quality drops, scores trend lower, directional verdict still accurate.
+- GPU passthrough VMs pass canvas check. Timing is primary.
+- This is one signal. High-stakes stuff should layer it with behavioral and network analysis.
+- New hypervisors get caught by physics but labelled `generic-vm` until the registry learns them.
 
 ---
 
 ## FAQ
 
-**Does it work with browser extensions installed (uBlock, Privacy Badger, 1Password)?**
+**Browser extensions (uBlock, Privacy Badger, 1Password)?**
+Don't touch the physics layer. Core probe is thermal — WASM matrix multiply timing across cold/load/hot phases. Extensions can't fake DRAM refresh variance. Canvas signals (which some extensions affect) are weighted inputs, not gates.
 
-Yes. Extensions don't touch the physics layer. The core probe is thermal — it measures entropy growth via WASM matrix multiply timing across cold/load/hot CPU phases. Extensions cannot fake DRAM refresh variance or thermal noise on real silicon. Canvas signals (which some extensions do affect) are weighted inputs, not gates. The heuristic engine cross-validates across 5 independent signals, so no single channel can cause a false flag.
-
-**What about Brave's timer clamping?**
-
-Brave reduces `performance.now()` resolution to 100µs to prevent fingerprinting. We detect this via `timerGranularityMs` and adjust thresholds accordingly. A clamped timer on real hardware still shows thermal variance across phases. A VM with a clamped timer is still flat. The EJR check survives timer clamping — it's a ratio, not an absolute threshold.
+**Brave's timer clamping?**
+Detected via `timerGranularityMs`, thresholds adjust. Clamped timer on real hardware still shows thermal variance. VM with clamped timer is still flat. EJR is a ratio, not absolute.
 
 **Can a VM spoof this?**
+One signal, sure. All five while keeping them mutually coherent? That's the hard part. Hurst-AC coherence specifically catches generated-not-measured data — the two signals are physically linked and have to match each other, not just hit thresholds individually.
 
-Spoofing one signal is straightforward. Spoofing all five simultaneously while keeping them mutually coherent with each other is a different problem. The Hurst-AC coherence check specifically catches data that was *generated* to look right rather than *measured* from real hardware — the two signals are physically linked and have to match each other, not just hit individual thresholds. See the [KVM example above](#the-picket-fence-detector) where four physical laws are violated simultaneously.
+**Performance overhead?**
+0.9–3.5s for the probe. Obvious VMs exit at 50 iterations (~0.9s). Real hardware typically ~120 iterations (~2s). JS overhead outside the probe is under 2ms.
 
-**Does it collect or transmit any personal data?**
-
-No. Nothing leaves the browser except a ~1.6KB statistical summary with all raw signals BLAKE3-hashed. The server receives enough to verify the proof. Not enough to reconstruct any original signal or re-identify a user across sessions.
-
-**What's the performance overhead?**
-
-The probe takes 0.9–3.5 seconds depending on how quickly the signal converges. For obvious VMs it exits at 50 iterations (~0.9s). For real hardware it typically exits around 100–120 iterations (~2s). JavaScript overhead outside the probe itself is under 2ms. Best used on deliberate user actions (login, checkout) not page load.
-
-**Mobile support?**
-
-Mobile browsers cap `performance.now()` to 1ms resolution which reduces signal quality. The classifier adjusts thresholds and scores trend lower, but the directional verdict (VM vs. physical) remains accurate. The bio layer (touch timing, accelerometer jitter on supported devices) compensates partially.
+**Mobile?**
+1ms timer cap reduces signal quality. Classifier adjusts, scores trend lower, verdict stays directional. Bio layer (touch timing, accelerometer) compensates.
 
 ---
 
