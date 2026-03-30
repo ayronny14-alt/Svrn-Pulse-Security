@@ -23,7 +23,7 @@ jobs:
       - name: Auto-merge patch and minor updates
         if: >
           steps.dependabot-metadata.outputs.update-type != 'version-update:semver-major'
-        uses: pascalgn/automerge-action@v0.15.0
+        uses: pascalgn/automerge-action@v0.16.4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           merge_method: squash
