@@ -3,15 +3,10 @@
  *
  * Analyses the timing distribution from the entropy probe to classify
  * the host as a real consumer device or a sanitised datacenter VM.
- *
- * Core insight:
- *   Real hardware  → thermal throttling, OS context switches, DRAM refresh
- *                    cycles create a characteristic "noisy" but physically
- *                    plausible timing distribution.
- *   Datacenter VM  → hypervisor scheduler presents a nearly-flat execution
- *                    curve; thermal feedback is absent; timer may be
- *                    quantised to the host's scheduler quantum.
  */
+
+import { mean, stdDev, percentile, cv as computeCV } from '../utils/stats.js';
+import { CONFIG } from '../config.js';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -49,14 +44,15 @@ export function classifyJitter(timings, opts = {}) {
   // 1. Coefficient of Variation  (weight 0.25)
   //    Real hardware: CV ∈ [0.04, 0.35]
   //    VM:            CV often < 0.02 ("too flat") or > 0.5 (scheduler bursts)
+  const { minCV, maxCV } = CONFIG.jitter;
   let cvScore = 0;
-  if (stats.cv >= 0.04 && stats.cv <= 0.35) {
+  if (stats.cv >= minCV && stats.cv <= maxCV) {
     cvScore = 1.0;
-  } else if (stats.cv >= 0.02 && stats.cv < 0.04) {
-    cvScore = (stats.cv - 0.02) / 0.02; // linear ramp up
+  } else if (stats.cv >= 0.02 && stats.cv < minCV) {
+    cvScore = (stats.cv - 0.02) / (minCV - 0.02); // linear ramp up
     flags.push('LOW_CV_BORDERLINE');
-  } else if (stats.cv > 0.35 && stats.cv < 0.5) {
-    cvScore = 1.0 - (stats.cv - 0.35) / 0.15; // ramp down
+  } else if (stats.cv > maxCV && stats.cv < 0.5) {
+    cvScore = 1.0 - (stats.cv - maxCV) / 0.15; // ramp down
     flags.push('HIGH_CV_POSSIBLE_SCHEDULER_BURST');
   } else if (stats.cv < 0.02) {
     cvScore = 0;
@@ -65,7 +61,7 @@ export function classifyJitter(timings, opts = {}) {
     cvScore = 0.2;
     flags.push('CV_TOO_HIGH_SCHEDULER_BURST');
   }
-  components.cv = { score: cvScore, weight: 0.25, value: stats.cv };
+  components.cv = { score: cvScore, weight: CONFIG.jitter.weightCV, value: stats.cv };
 
   // 2. Autocorrelation profile  (weight 0.20)
   //    Real thermal noise → all lags near 0 (i.i.d. / Brownian)
@@ -191,43 +187,25 @@ export function classifyJitter(timings, opts = {}) {
  * @returns {TimingStats}
  */
 export function computeStats(arr) {
-  const sorted = [...arr].sort((a, b) => a - b);
-  const n      = arr.length;
-  const mean   = arr.reduce((s, v) => s + v, 0) / n;
-  const varr   = arr.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1);
-  const std    = Math.sqrt(varr);
+  const n = arr.length;
+  if (n < 2) return { n, mean: mean(arr), std: 0, cv: 0 };
 
-  const pct = (p) => {
-    const idx = (p / 100) * (n - 1);
-    const lo  = Math.floor(idx);
-    const hi  = Math.ceil(idx);
-    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-  };
-
-  // Skewness (Fisher-Pearson)
-  const skew = n < 3 ? 0 :
-    arr.reduce((s, v) => s + ((v - mean) / std) ** 3, 0) *
-    (n / ((n - 1) * (n - 2)));
-
-  // Excess kurtosis
-  const kurt = n < 4 ? 0 :
-    (arr.reduce((s, v) => s + ((v - mean) / std) ** 4, 0) *
-     (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))) -
-    (3 * (n - 1) ** 2) / ((n - 2) * (n - 3));
+  const m = mean(arr);
+  const s = stdDev(arr);
 
   return {
-    n, mean, std,
-    cv:       std / mean,
-    min:      sorted[0],
-    max:      sorted[n - 1],
-    p5:       pct(5),
-    p25:      pct(25),
-    p50:      pct(50),
-    p75:      pct(75),
-    p95:      pct(95),
-    p99:      pct(99),
-    skewness: skew,
-    kurtosis: kurt,
+    n,
+    mean:     m,
+    std:      s,
+    cv:       s / m,
+    min:      Math.min(...arr),
+    max:      Math.max(...arr),
+    p5:       percentile(arr, 5),
+    p25:      percentile(arr, 25),
+    p50:      percentile(arr, 50),
+    p75:      percentile(arr, 75),
+    p95:      percentile(arr, 95),
+    p99:      percentile(arr, 99),
   };
 }
 
@@ -245,8 +223,6 @@ export function computeStats(arr) {
  * @property {number} p75
  * @property {number} p95
  * @property {number} p99
- * @property {number} skewness
- * @property {number} kurtosis
  */
 
 // ---------------------------------------------------------------------------

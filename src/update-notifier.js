@@ -28,7 +28,8 @@ const isTTY   = () =>
   typeof process !== 'undefined' &&
   process.stdout?.isTTY === true &&
   process.env?.NO_COLOR == null &&
-  process.env?.PULSE_NO_UPDATE == null;
+  process.env?.PULSE_NO_UPDATE == null &&
+  process.env?.NODE_ENV !== 'test';
 
 const isNode  = () => typeof process !== 'undefined' && typeof window === 'undefined';
 

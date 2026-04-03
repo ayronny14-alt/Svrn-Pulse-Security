@@ -72,6 +72,7 @@ export const config = Object.freeze({
   port:            parseInt(process.env.PORT ?? '3001', 10),
   nodeEnv,
   redisUrl:        process.env.REDIS_URL ?? null,
+  sqlitePath:      process.env.SQLITE_PATH ?? './.pulse/pulse.sqlite',
   nonceTtl:        parseInt(process.env.NONCE_TTL ?? '300', 10),
   webhookSecret:   webhookSecret ?? 'change-me',
   challengeSecret: challengeSecret ?? 'dev-only-challenge-secret-not-for-production!!',

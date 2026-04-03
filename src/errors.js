@@ -1,8 +1,27 @@
 /**
- * @svrnsec/pulse — Structured Error Codes
- *
- * Use these constants instead of string matching for type-safe error handling.
+ * @svrnsec/pulse — Structured Error Handling
  */
+
+export class PulseError extends Error {
+  constructor(code, message, meta = {}) {
+    super(message);
+    this.name = 'PulseError';
+    this.code = code;
+    this.meta = meta;
+    this.ts = Date.now();
+  }
+
+  toJSON() {
+    return {
+      name: this.name,
+      code: this.code,
+      message: this.message,
+      meta: this.meta,
+      ts: this.ts
+    };
+  }
+}
+
 export const PulseErrorCode = Object.freeze({
   // Structural
   INVALID_PAYLOAD_STRUCTURE: 'INVALID_PAYLOAD_STRUCTURE',

@@ -55,6 +55,7 @@ import { collectDramTimings }       from './collector/dram.js';
 import { collectEnfTimings }        from './collector/enf.js';
 import { detectLlmAgent }       from './analysis/llm.js';
 import { notifyOnExit }             from './update-notifier.js';
+import { CONFIG }                   from './config.js';
 
 // Register background update check — fires once at process startup.
 // Shows a styled notification box after the process exits if a newer version
@@ -129,6 +130,8 @@ async function _pulseHosted(opts) {
 // pulse()  — main entry point
 // ---------------------------------------------------------------------------
 
+const _pulseHistory = [];
+
 /**
  * Run the full @svrnsec/pulse probe and return a signed commitment.
  *
@@ -140,6 +143,21 @@ async function _pulseHosted(opts) {
  * @returns {Promise<PulseCommitment>}
  */
 export async function pulse(opts = {}) {
+  // ── Client-side rate limiting ──────────────────────────────────────────────
+  const now = Date.now();
+  const windowMs = 60_000;
+  const maxPerWindow = CONFIG.rateLimit.maxPulsesPerMin;
+  
+  // Clean old entries
+  while (_pulseHistory.length > 0 && _pulseHistory[0] < now - windowMs) {
+    _pulseHistory.shift();
+  }
+
+  if (_pulseHistory.length >= maxPerWindow) {
+    throw new Error(`@svrnsec/pulse: Rate limit exceeded (${maxPerWindow} pulses per minute). Please wait before trying again.`);
+  }
+  _pulseHistory.push(now);
+
   // ── Hosted API mode ────────────────────────────────────────────────────────
   if (opts.apiKey) {
     return _pulseHosted(opts);

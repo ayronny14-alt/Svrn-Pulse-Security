@@ -1,13 +1,8 @@
 /**
  * @svrnsec/pulse — Bio-Binding Layer
- *
- * Captures mouse-movement micro-stutters and keystroke-cadence dynamics
- * WHILE the hardware entropy probe is running.  Computes the
- * "Interference Coefficient": how much human input jitters hardware timing.
- *
- * PRIVACY NOTE: Only timing deltas are retained.  No key labels, no raw
- * (x, y) coordinates, no content of any kind is stored or transmitted.
  */
+
+import { mean, variance, cv, percentile } from '../utils/stats.js';
 
 // ---------------------------------------------------------------------------
 // Internal state
@@ -130,12 +125,12 @@ export class BioCollector {
 
     const mouseStats = {
       sampleCount:      iei.length,
-      ieiMean:          _mean(iei),
-      ieiCV:            _cv(iei),
-      velocityP50:      _percentile(velocities, 50),
-      velocityP95:      _percentile(velocities, 95),
-      angularJerkMean:  _mean(angJerk),
-      pressureVariance: _variance(pressure),
+      ieiMean:          mean(iei),
+      ieiCV:            cv(iei),
+      velocityP50:      percentile(velocities, 50),
+      velocityP95:      percentile(velocities, 95),
+      angularJerkMean:  mean(angJerk),
+      pressureVariance: variance(pressure),
     };
 
     // ── Keyboard statistics ───────────────────────────────────────────────
@@ -147,10 +142,10 @@ export class BioCollector {
 
     const keyStats = {
       sampleCount:   dwellTimes.length,
-      dwellMean:     _mean(dwellTimes),
-      dwellCV:       _cv(dwellTimes),
-      ikiMean:       _mean(iki),
-      ikiCV:         _cv(iki),
+      dwellMean:     mean(dwellTimes),
+      dwellCV:       cv(dwellTimes),
+      ikiMean:       mean(iki),
+      ikiCV:         cv(iki),
     };
 
     // ── Interference Coefficient ──────────────────────────────────────────
@@ -186,32 +181,7 @@ export class BioCollector {
 // Statistical helpers (private)
 // ---------------------------------------------------------------------------
 
-function _mean(arr) {
-  if (!arr.length) return 0;
-  return arr.reduce((a, b) => a + b, 0) / arr.length;
-}
-
-function _variance(arr) {
-  if (arr.length < 2) return 0;
-  const m = _mean(arr);
-  return arr.reduce((s, v) => s + (v - m) ** 2, 0) / (arr.length - 1);
-}
-
-function _cv(arr) {
-  if (!arr.length) return 0;
-  const m = _mean(arr);
-  if (m === 0) return 0;
-  return Math.sqrt(_variance(arr)) / Math.abs(m);
-}
-
-function _percentile(sorted, p) {
-  const arr = [...sorted].sort((a, b) => a - b);
-  if (!arr.length) return 0;
-  const idx = (p / 100) * (arr.length - 1);
-  const lo  = Math.floor(idx);
-  const hi  = Math.ceil(idx);
-  return arr[lo] + (arr[hi] - arr[lo]) * (idx - lo);
-}
+const _mean = mean;
 
 /** Angular jerk: second derivative of movement direction (radians / s²) */
 function _computeAngularJerk(events) {

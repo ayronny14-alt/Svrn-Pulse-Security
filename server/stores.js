@@ -15,9 +15,12 @@ if (config.redisUrl) {
     console.log(JSON.stringify({ event: 'store.redis_connected', url: config.redisUrl.replace(/\/\/.*@/, '//***@') }));
   } catch (err) {
     console.error(JSON.stringify({ event: 'store.redis_failed', error: err.message }));
-    console.warn('[pulse-api] Falling back to in-memory nonce store. Multi-instance deployments will NOT work.');
     nonceStore = createNonceStore(config.nonceTtl);
   }
+} else if (config.sqlitePath) {
+  const { createSqliteNonceStore } = await import('./store/sqliteNonceStore.js');
+  nonceStore = createSqliteNonceStore(config.sqlitePath, config.nonceTtl);
+  console.log(JSON.stringify({ event: 'store.sqlite_initialized', path: config.sqlitePath }));
 } else {
   nonceStore = createNonceStore(config.nonceTtl);
 }
