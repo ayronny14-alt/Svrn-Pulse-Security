@@ -123,7 +123,7 @@
     "scan":       "node bin/svrnsec-pulse.js scan"
   },
   "dependencies": {
-    "@noble/hashes": "^1.4.0",
+    "@noble/hashes": "^2.0.1",
     "better-sqlite3": "^9.0.0",
     "prom-client": "^15.0.0"
   },
