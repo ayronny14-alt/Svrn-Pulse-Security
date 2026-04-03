@@ -30,7 +30,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Audit dependencies
         run: npm audit --audit-level=high
@@ -58,7 +58,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
+      - run: npm install
       - name: Check for syntax errors
         # TODO: Add ESLint once configured (npm run lint). For now, node --check catches parse errors.
         run: node --check src/index.js src/proof/validator.js src/fingerprint.js
