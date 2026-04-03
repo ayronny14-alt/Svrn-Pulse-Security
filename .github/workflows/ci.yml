@@ -27,7 +27,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm install
@@ -57,7 +56,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
-          cache: 'npm'
       - run: npm install
       - name: Check for syntax errors
         # TODO: Add ESLint once configured (npm run lint). For now, node --check catches parse errors.
@@ -71,7 +69,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
-          cache: 'npm'
       - name: Install server deps
         run: cd server && npm ci
       - name: Syntax check server
