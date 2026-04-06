@@ -124,7 +124,7 @@
   },
   "dependencies": {
     "@noble/hashes": "^1.4.0",
-    "better-sqlite3": "^9.0.0",
+    "better-sqlite3": "^12.8.0",
     "prom-client": "^15.0.0"
   },
   "devDependencies": {
